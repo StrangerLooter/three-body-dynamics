@@ -561,11 +561,15 @@ export default function ThreeBodySimulator() {
 
   useEffect(() => {
     try {
-      const k = window.localStorage.getItem('groq_api_key');
-      const m = window.localStorage.getItem('groq_model');
-      if (k) setGroqKey(k);
-      if (m) setGroqModel(m);
-    } catch (e) { /* localStorage unavailable */ }
+      const saved = window.localStorage.getItem('groq_api_key');
+      const savedModel = window.localStorage.getItem('groq_model');
+      // Use saved key, or fall back to build-time env var (set in Vercel dashboard)
+      if (saved) setGroqKey(saved);
+      else if (import.meta.env.VITE_GROQ_KEY) setGroqKey(import.meta.env.VITE_GROQ_KEY);
+      if (savedModel) setGroqModel(savedModel);
+    } catch (e) {
+      if (import.meta.env.VITE_GROQ_KEY) setGroqKey(import.meta.env.VITE_GROQ_KEY);
+    }
   }, []);
 
   const saveGroqKey = (v) => {
@@ -1819,7 +1823,7 @@ export default function ThreeBodySimulator() {
 
       {/* LEFT PANEL — SIMULATION / PHYSICS / CAMERA / VISUALS / PRESETS */}
       <div
-        className={`absolute top-12 left-0 bottom-16 z-20 transition-transform duration-300 ${
+        className={`absolute top-12 left-0 bottom-20 z-20 transition-transform duration-300 ${
           ui.panelLeft ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -2022,7 +2026,7 @@ export default function ThreeBodySimulator() {
 
       {/* RIGHT PANEL — TELEMETRY / BODY DATA / EDIT */}
       <div
-        className={`absolute top-12 right-0 bottom-16 z-20 transition-transform duration-300 ${
+        className={`absolute top-12 right-0 bottom-20 z-20 transition-transform duration-300 ${
           ui.panelRight ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
@@ -2143,8 +2147,8 @@ export default function ThreeBodySimulator() {
         _tick={chartTick}
       />
 
-      {/* BOTTOM TRANSPORT BAR */}
-      <div className="absolute bottom-0 left-0 right-0 z-20 bg-black/50 backdrop-blur-sm border-t border-white/10 px-4 py-2.5 flex items-center gap-3 text-[11px] text-slate-300">
+      {/* BOTTOM TRANSPORT BAR — z-30 so it always sits above the analysis drawer */}
+      <div className="absolute bottom-0 left-0 right-0 z-30 bg-[#060d1a] border-t-2 border-cyan-400/30 px-4 py-3 flex items-center gap-3 text-[11px] text-slate-200">
         <SmallBtn onClick={resetSim} label="Reset simulation">⟲</SmallBtn>
         <SmallBtn onClick={togglePlay} active={ui.running} label={ui.running ? 'Pause' : 'Play'}>
           {ui.running ? '❚❚' : '▶'}
@@ -2153,12 +2157,12 @@ export default function ThreeBodySimulator() {
         <SmallBtn onClick={toggleAnalysis} active={ui.analysisOpen}>ANALYSIS</SmallBtn>
         <div className="flex-1 mx-2 h-[3px] bg-white/10 relative rounded-full overflow-hidden">
           <div
-            className="absolute left-0 top-0 bottom-0 bg-cyan-400/60"
+            className="absolute left-0 top-0 bottom-0 bg-cyan-400/70"
             style={{ width: `${Math.min(100, (ui.simTime % 20) * 5)}%` }}
           />
         </div>
-        <span className="text-slate-400 hidden sm:inline">T = {fmt(ui.simTime, 2)}</span>
-        <span className="text-cyan-300/70 hidden sm:inline">{ui.speed}×</span>
+        <span className="text-slate-300 hidden sm:inline tabular-nums">T = {fmt(ui.simTime, 2)}s</span>
+        <span className="text-cyan-300 hidden sm:inline font-semibold">{ui.speed}×</span>
       </div>
     </div>
   );
@@ -2214,7 +2218,7 @@ function AnalysisDrawer({ open, tab, onTab, history, onExportCSV, onExportJSON }
 
   return (
     <div
-      className={`absolute left-0 right-0 bottom-16 z-[25] h-60 bg-black/75 backdrop-blur-md border-t border-white/10 transition-transform duration-300 ${
+      className={`absolute left-0 right-0 bottom-20 z-[25] h-60 bg-[#060d1a]/95 backdrop-blur-md border-t-2 border-cyan-400/20 transition-transform duration-300 ${
         open ? 'translate-y-0' : 'translate-y-[115%]'
       }`}
     >
@@ -2380,10 +2384,10 @@ function SmallBtn({ children, onClick, active, label }) {
       onClick={onClick}
       aria-label={label || undefined}
       title={label || undefined}
-      className={`px-2.5 py-1 border text-[11px] transition-colors ${
+      className={`px-3 py-1.5 border text-[11px] font-mono tracking-wide transition-colors ${
         active
-          ? 'border-cyan-400/60 text-cyan-200 bg-cyan-400/10'
-          : 'border-white/15 text-slate-300 hover:border-white/30 hover:bg-white/5'
+          ? 'border-cyan-400/80 text-cyan-200 bg-cyan-400/15 font-semibold'
+          : 'border-white/25 text-slate-200 hover:border-cyan-400/50 hover:text-cyan-200 hover:bg-white/5'
       }`}
     >
       {children}
@@ -2453,7 +2457,7 @@ function ChatPanel({
     }
   };
   return (
-    <div className="absolute bottom-16 right-3 z-[35] w-80 max-w-[calc(100vw-1.5rem)] h-96 bg-black/90 backdrop-blur-md border border-white/15 flex flex-col font-mono">
+    <div className="absolute bottom-20 right-3 z-[35] w-80 max-w-[calc(100vw-1.5rem)] h-96 bg-black/90 backdrop-blur-md border border-white/15 flex flex-col font-mono">
       <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
         <span className="text-[10px] tracking-[0.2em] text-slate-200">AI ASSISTANT</span>
         <div className="flex items-center gap-2">
