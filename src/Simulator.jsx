@@ -565,7 +565,7 @@ export default function ThreeBodySimulator() {
       const m = window.localStorage.getItem('groq_model');
       if (k) setGroqKey(k);
       if (m) setGroqModel(m);
-    } catch (e) { /* localStorage unavailable — chat just starts with empty key */ }
+    } catch (e) { /* localStorage unavailable */ }
   }, []);
 
   const saveGroqKey = (v) => {
@@ -1691,9 +1691,12 @@ export default function ThreeBodySimulator() {
         }} />
         <div className="relative z-10">
           <div className="text-[11px] tracking-[0.35em] text-cyan-300/70 mb-3 font-mono">RK4 · CHAOS LAB · FIELD VISUALIZATION</div>
-          <h1 className="text-3xl md:text-5xl font-light text-slate-100 tracking-wide mb-3">
+          <h1 className="text-3xl md:text-5xl font-light text-slate-100 tracking-wide mb-2">
             THREE-BODY DYNAMICS
           </h1>
+          <p className="text-slate-500 text-[11px] tracking-widest font-mono mb-5">
+            Created by Ram Vishwakarma · Physics Student, IEHE Bhopal
+          </p>
           <p className="text-slate-400 text-sm md:text-base max-w-md mx-auto mb-8 font-light">
             A numerical exploration of gravitational motion and chaos
           </p>
