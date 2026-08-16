@@ -563,12 +563,13 @@ export default function ThreeBodySimulator() {
     try {
       const saved = window.localStorage.getItem('groq_api_key');
       const savedModel = window.localStorage.getItem('groq_model');
-      // Use saved key, or fall back to build-time env var (set in Vercel dashboard)
-      if (saved) setGroqKey(saved);
-      else if (import.meta.env.VITE_GROQ_KEY) setGroqKey(import.meta.env.VITE_GROQ_KEY);
+      // Use saved key first, then env var, then default key
+      const defaultKey = import.meta.env.VITE_GROQ_KEY ||
+        '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';
+      setGroqKey(saved || defaultKey);
       if (savedModel) setGroqModel(savedModel);
     } catch (e) {
-      if (import.meta.env.VITE_GROQ_KEY) setGroqKey(import.meta.env.VITE_GROQ_KEY);
+      setGroqKey('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');
     }
   }, []);
 
