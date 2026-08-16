@@ -3,7 +3,7 @@
 **A professional 3D numerical simulation of the classical Three-Body Problem**
 Built by **Ram Vishwakarma** — B.Sc. Physics (Hons.), IEHE Bhopal | College Model Competition Project
 
-🌐 **Live:** https://3bp-mu.vercel.app
+🌐 **Live:** https://three-body-dynamics.vercel.app
 
 ---
 
