@@ -558,7 +558,7 @@ export default function ThreeBodySimulator() {
   const [narrateTimer, setNarrateTimer] = useState(null);
   const [quizActive, setQuizActive] = useState(false);
   const [groqKey, setGroqKey] = useState('');
-  const [groqModel] = useState('llama3-70b-8192');
+  const [groqModel] = useState('openai/gpt-oss-120b');
   const chatScrollRef = useRef(null);
 
   useEffect(() => {
