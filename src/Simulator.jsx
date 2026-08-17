@@ -554,6 +554,9 @@ export default function ThreeBodySimulator() {
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState(null);
+  const [chatMode, setChatMode] = useState('normal'); // 'normal' | 'narrate' | 'quiz' | 'judge'
+  const [narrateTimer, setNarrateTimer] = useState(null);
+  const [quizActive, setQuizActive] = useState(false);
   const [groqKey, setGroqKey] = useState('');
   const [groqModel] = useState('llama-3.3-70b-versatile');
   const chatScrollRef = useRef(null);
@@ -561,12 +564,9 @@ export default function ThreeBodySimulator() {
   useEffect(() => {
     try {
       const saved = window.localStorage.getItem('groq_api_key');
-      const savedModel = window.localStorage.getItem('groq_model');
-      // Use saved key first, then env var, then default key
       const defaultKey = import.meta.env.VITE_GROQ_KEY ||
         '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';
       setGroqKey(saved || defaultKey);
-      if (savedModel) setGroqModel(savedModel);
     } catch (e) {
       setGroqKey('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');
     }
@@ -581,9 +581,6 @@ export default function ThreeBodySimulator() {
     if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
   }, [chatMessages, chatLoading]);
 
-  // Builds a fresh text snapshot of the live simulation for the chat system prompt —
-  // read straight from simRef so the assistant always sees the current frame, not a
-  // throttled/stale copy.
   const buildSimSnapshot = () => {
     const s = simRef.current;
     const energy = computeEnergy(s.state, s.masses, s.G);
@@ -596,27 +593,58 @@ export default function ThreeBodySimulator() {
       .join('\n');
     let chaosLine = `Chaos Lab: ${s.chaosOn ? 'ON' : 'OFF'}`;
     if (s.chaosOn && sysBRef.current) {
-      chaosLine += `, twin-system separation=${computeSeparation(s.state, sysBRef.current.state).toExponential(3)}, initial separation=${s.chaosInitialSep.toExponential(3)}`;
+      chaosLine += `, divergence=${computeSeparation(s.state, sysBRef.current.state).toExponential(3)}, initial=${s.chaosInitialSep.toExponential(3)}`;
     }
     return [
-      `Preset: ${s.presetKey} | Integrator: ${s.integrator.toUpperCase()} | dt=${s.dt.toExponential(2)} | G=${s.G} | Sim time=${s.simTime.toFixed(3)}s | Running=${s.running}`,
+      `Preset: ${s.presetKey} | Integrator: ${s.integrator.toUpperCase()} | dt=${s.dt.toExponential(2)} | G=${s.G} | T=${s.simTime.toFixed(3)}s | Running=${s.running}`,
       bodiesDesc,
-      `Kinetic energy=${energy.KE.toFixed(4)} | Potential energy=${energy.PE.toFixed(4)} | Total energy=${energy.total.toFixed(4)}`,
-      `Linear momentum |P|=${vLen(p).toFixed(4)} | Angular momentum |L|=${vLen(L).toFixed(4)}`,
-      `Center of mass=(${com.map((v) => v.toFixed(4)).join(', ')})`,
-      `Pairwise distances: B1-B2=${dist.pairs.d01.toFixed(3)} | B1-B3=${dist.pairs.d02.toFixed(3)} | B2-B3=${dist.pairs.d12.toFixed(3)}`,
+      `KE=${energy.KE.toFixed(4)} | PE=${energy.PE.toFixed(4)} | E_total=${energy.total.toFixed(4)}`,
+      `|P|=${vLen(p).toFixed(4)} | |L|=${vLen(L).toFixed(4)}`,
+      `COM=(${com.map((v) => v.toFixed(3)).join(', ')})`,
+      `Distances: B1-B2=${dist.pairs.d01.toFixed(3)} | B1-B3=${dist.pairs.d02.toFixed(3)} | B2-B3=${dist.pairs.d12.toFixed(3)}`,
       chaosLine,
     ].join('\n');
   };
 
-  const sendChatMessage = async () => {
-    const text = chatInput.trim();
+  const SYSTEM_PROMPTS = {
+    normal:
+      'You are an AI physics tutor inside a live 3D Three-Body Problem simulator (Newtonian gravity, RK4/Verlet/Euler integrators, Chaos Lab, gravitational field viz). ' +
+      'Answer questions about orbital mechanics, gravity, conservation laws, numerical integration, and chaos theory. ' +
+      'Use the live simulation data when relevant. Keep answers concise. Use plain-text math (^, *, sqrt()).\n\nCURRENT SIMULATION STATE:\n',
+    narrate:
+      'You are a live science narrator for a 3D Three-Body Problem simulator. ' +
+      'Describe what is CURRENTLY happening in 2-3 vivid, engaging sentences — like a nature documentary voiceover. ' +
+      'Mention specific values (energy, distances, speeds) from the data. Be dramatic but scientifically accurate.\n\nCURRENT SIMULATION STATE:\n',
+    quiz:
+      'You are a physics quiz master for a Three-Body Problem simulator. ' +
+      'Ask ONE short multiple-choice question (A/B/C/D) based on what is currently happening in the simulation. ' +
+      'Make it educational and directly connected to the live data shown. After asking, wait for the user\'s answer.\n\nCURRENT SIMULATION STATE:\n',
+    judge:
+      'You are a tough but fair physics professor judging a student\'s Three-Body Problem simulator at a college model competition. ' +
+      'Ask ONE probing question about the physics, numerical methods, or implementation to test the student\'s depth of understanding. ' +
+      'Be specific, reference the current simulation state, and vary between easy and hard questions.\n\nCURRENT SIMULATION STATE:\n',
+  };
+
+  const groqCall = async (messages, mode = 'normal') => {
+    const systemPrompt = (SYSTEM_PROMPTS[mode] || SYSTEM_PROMPTS.normal) + buildSimSnapshot();
+    const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
+      body: JSON.stringify({
+        model: groqModel,
+        messages: [{ role: 'system', content: systemPrompt }, ...messages.slice(-12)],
+        temperature: mode === 'narrate' ? 0.75 : 0.4,
+        max_tokens: mode === 'narrate' ? 200 : 700,
+      }),
+    });
+    if (!res.ok) throw new Error(`Groq ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content || '(empty response)';
+  };
+
+  const sendChatMessage = async (overrideText) => {
+    const text = (overrideText || chatInput).trim();
     if (!text || chatLoading) return;
-    if (!groqKey) {
-      setChatError('Something went wrong. Please try again.');
-      setShowChatSettings(true);
-      return;
-    }
     const userMsg = { role: 'user', content: text };
     const nextMessages = [...chatMessages, userMsg];
     setChatMessages(nextMessages);
@@ -624,29 +652,62 @@ export default function ThreeBodySimulator() {
     setChatLoading(true);
     setChatError(null);
     try {
-      const systemPrompt =
-        'You are an AI physics tutor embedded inside a live, browser-based 3D Three-Body Problem simulator ' +
-        '(Newtonian gravity, RK4/Verlet/Euler integrators, Chaos Lab, gravitational field visualization). ' +
-        'Answer questions about orbital mechanics, gravity, conservation laws, numerical integration, and chaos theory, ' +
-        'and use the live simulation data below whenever the question relates to it. Keep answers concise and use plain-text ' +
-        'notation (^, *, /, sqrt(), no LaTeX) since this is a plain chat window.\n\nCURRENT SIMULATION STATE:\n' +
-        buildSimSnapshot();
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
-        body: JSON.stringify({
-          model: groqModel,
-          messages: [{ role: 'system', content: systemPrompt }, ...nextMessages.slice(-12)],
-          temperature: 0.4,
-          max_tokens: 700,
-        }),
-      });
-      if (!res.ok) {
-        const errText = await res.text();
-        throw new Error(`Groq API error ${res.status}: ${errText.slice(0, 220)}`);
+      // Simulation control commands
+      const lower = text.toLowerCase();
+      let simControlReply = null;
+      if (lower.includes('pause') || lower.includes('stop')) {
+        simRef.current.running = false;
+        setUi((p) => ({ ...p, running: false }));
+        simControlReply = '⏸ Simulation paused.';
+      } else if (lower.includes('play') || lower.includes('start') || lower.includes('resume')) {
+        simRef.current.running = true;
+        setUi((p) => ({ ...p, running: true }));
+        simControlReply = '▶ Simulation running.';
+      } else if (lower.includes('reset')) {
+        resetSim();
+        simControlReply = '⟲ Simulation reset to initial conditions.';
+      } else if (lower.match(/speed.*(0\.1|0\.25|0\.5|1|2|10|100)/)) {
+        const m = lower.match(/(\d+\.?\d*)\s*x?/);
+        const spd = m ? parseFloat(m[1]) : 1;
+        if ([0.1,0.25,0.5,1,2,10,100].includes(spd)) {
+          simRef.current.speed = spd;
+          setUi((p) => ({ ...p, speed: spd }));
+          simControlReply = `⚡ Speed set to ${spd}×.`;
+        }
+      } else if (lower.includes('figure') || lower.includes('figure-8') || lower.includes('figure8')) {
+        loadPreset('figureEight');
+        simControlReply = '🌀 Loaded Figure-8 Orbit preset.';
+      } else if (lower.includes('chaos') && lower.includes('preset')) {
+        loadPreset('chaos');
+        simControlReply = '💥 Loaded Equal-Mass Chaos preset.';
+      } else if (lower.includes('hierarchical')) {
+        loadPreset('hierarchical');
+        simControlReply = '⭐ Loaded Hierarchical Triple preset.';
+      } else if (lower.includes('restricted')) {
+        loadPreset('restricted');
+        simControlReply = '🔬 Loaded Restricted Three-Body preset.';
+      } else if (lower.includes('trail') && lower.includes('on')) {
+        simRef.current.trailsOn = true;
+        setUi((p) => ({ ...p, trailsOn: true }));
+        simControlReply = '✓ Trails enabled.';
+      } else if (lower.includes('trail') && lower.includes('off')) {
+        simRef.current.trailsOn = false;
+        setUi((p) => ({ ...p, trailsOn: false }));
+        simControlReply = '✓ Trails disabled.';
       }
-      const data = await res.json();
-      const reply = data.choices?.[0]?.message?.content || '(empty response)';
+
+      let reply;
+      if (simControlReply) {
+        // Append a short AI comment after the control action
+        const aiComment = await groqCall(
+          [...nextMessages, { role: 'assistant', content: simControlReply }],
+          'normal'
+        );
+        reply = `${simControlReply}\n\n${aiComment}`;
+      } else {
+        // Detect quiz answer if quiz mode is active
+        reply = await groqCall(nextMessages, chatMode);
+      }
       setChatMessages((m) => [...m, { role: 'assistant', content: reply }]);
     } catch (err) {
       setChatError(err.message || 'Request failed.');
@@ -654,6 +715,46 @@ export default function ThreeBodySimulator() {
       setChatLoading(false);
     }
   };
+
+  // --- Narrate mode: auto-commentary every 8 seconds ---
+  const startNarrate = () => {
+    setChatMode('narrate');
+    const run = async () => {
+      setChatLoading(true);
+      try {
+        const reply = await groqCall([], 'narrate');
+        setChatMessages((m) => [...m, { role: 'assistant', content: '🎙 ' + reply }]);
+      } catch (e) { /* silent */ } finally {
+        setChatLoading(false);
+      }
+    };
+    run();
+    const id = setInterval(run, 8000);
+    setNarrateTimer(id);
+  };
+
+  const stopNarrate = () => {
+    if (narrateTimer) { clearInterval(narrateTimer); setNarrateTimer(null); }
+    setChatMode('normal');
+  };
+
+  // --- Explain button ---
+  const explainNow = async () => {
+    if (chatLoading) return;
+    const prompt = 'In 3-4 sentences, explain what is currently happening in this simulation — the orbital configuration, stability, and what is physically interesting about it right now.';
+    await sendChatMessage(prompt);
+  };
+
+  // --- Export chat as text ---
+  const exportChat = () => {
+    if (!chatMessages.length) return;
+    const lines = chatMessages.map((m) => `[${m.role.toUpperCase()}]\n${m.content}`).join('\n\n---\n\n');
+    const blob = new Blob([`THREE-BODY DYNAMICS — AI Chat Export\n${'='.repeat(40)}\n\n${lines}`], { type: 'text/plain' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'chat-notes.txt'; a.click();
+  };
+
+  // Cleanup narrate on unmount
+  useEffect(() => () => { if (narrateTimer) clearInterval(narrateTimer); }, [narrateTimer]);
 
   useEffect(() => {
     analysisOpenRef.current = ui.analysisOpen;
@@ -1794,7 +1895,7 @@ export default function ThreeBodySimulator() {
 
       {chatOpen && (
         <ChatPanel
-          onClose={() => setChatOpen(false)}
+          onClose={() => { setChatOpen(false); stopNarrate(); }}
           messages={chatMessages}
           input={chatInput}
           onInputChange={setChatInput}
@@ -1802,6 +1903,15 @@ export default function ThreeBodySimulator() {
           loading={chatLoading}
           error={chatError}
           scrollRef={chatScrollRef}
+          chatMode={chatMode}
+          onSetMode={setChatMode}
+          onExplain={explainNow}
+          onStartNarrate={startNarrate}
+          onStopNarrate={stopNarrate}
+          narrateActive={!!narrateTimer}
+          onQuiz={() => sendChatMessage('Ask me a multiple choice physics quiz question based on what the simulation is doing right now.')}
+          onJudge={() => sendChatMessage('You are a competition judge. Ask me one tough question about this simulation to test my understanding.')}
+          onExportChat={exportChat}
         />
       )}
 
@@ -2438,53 +2548,132 @@ function ShortcutsOverlay({ onClose }) {
 
 function ChatPanel({
   onClose, messages, input, onInputChange, onSend, loading, error,
-  groqKey, onKeyChange, groqModel, onModelChange, showSettings, onToggleSettings, scrollRef,
+  scrollRef, chatMode, onSetMode, onExplain, onStartNarrate, onStopNarrate,
+  onQuiz, onJudge, onExportChat, narrateActive,
 }) {
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      onSend();
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); onSend(); }
   };
+
+  const SUGGESTED = [
+    'Why is energy drifting?',
+    'Is this system chaotic?',
+    'What will happen next?',
+    'Explain conservation of momentum here',
+    'Why do bodies speed up when close?',
+  ];
+
+  const MODES = [
+    { key: 'normal',  label: '💬 Chat',    title: 'Normal Q&A' },
+    { key: 'narrate', label: '🎙 Narrate', title: 'Auto-commentary every 8s' },
+    { key: 'quiz',    label: '📝 Quiz',    title: 'Get a quiz question' },
+    { key: 'judge',   label: '🎓 Judge',   title: 'Judge asks competition questions' },
+  ];
+
   return (
-    <div className="absolute bottom-20 right-3 z-[35] w-80 max-w-[calc(100vw-1.5rem)] h-96 bg-black/90 backdrop-blur-md border border-white/15 flex flex-col font-mono">
-      <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
+    <div className="absolute bottom-20 right-3 z-[35] w-80 max-w-[calc(100vw-1.5rem)] bg-black/92 backdrop-blur-md border border-white/15 flex flex-col font-mono" style={{height:'26rem'}}>
+
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 shrink-0">
         <span className="text-[10px] tracking-[0.2em] text-slate-200">AI ASSISTANT</span>
-        <button onClick={onClose} aria-label="Close AI assistant" className="text-slate-500 hover:text-cyan-300 text-sm">✕</button>
+        <div className="flex items-center gap-2">
+          <button onClick={onExportChat} title="Export chat as text" className="text-slate-500 hover:text-cyan-300 text-[10px]">⬇</button>
+          <button onClick={onClose} aria-label="Close" className="text-slate-500 hover:text-cyan-300 text-sm">✕</button>
+        </div>
       </div>
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
+      {/* Mode selector */}
+      <div className="flex gap-1 px-2 pt-1.5 pb-1 shrink-0 overflow-x-auto">
+        {MODES.map((m) => (
+          <button
+            key={m.key}
+            title={m.title}
+            onClick={() => {
+              onSetMode(m.key);
+              if (m.key === 'narrate') onStartNarrate();
+              else { onStopNarrate(); }
+              if (m.key === 'quiz') onQuiz();
+              if (m.key === 'judge') onJudge();
+            }}
+            className={`whitespace-nowrap text-[9px] px-2 py-1 border transition-colors ${
+              chatMode === m.key
+                ? 'border-cyan-400/60 text-cyan-200 bg-cyan-400/10'
+                : 'border-white/10 text-slate-500 hover:text-slate-300'
+            }`}
+          >
+            {m.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Quick-action buttons */}
+      <div className="flex gap-1 px-2 pb-1.5 shrink-0">
+        <button
+          onClick={onExplain}
+          disabled={loading}
+          className="text-[9px] px-2 py-1 border border-violet-400/40 text-violet-300 hover:bg-violet-400/10 disabled:opacity-40 whitespace-nowrap"
+        >
+          🔍 EXPLAIN NOW
+        </button>
+        <button
+          onClick={() => onSend('What should I watch for in this simulation?')}
+          disabled={loading}
+          className="text-[9px] px-2 py-1 border border-white/10 text-slate-400 hover:text-slate-200 disabled:opacity-40 whitespace-nowrap"
+        >
+          💡 TIPS
+        </button>
+      </div>
+
+      {/* Messages */}
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-1 space-y-2 min-h-0">
         {messages.length === 0 && (
-          <div className="text-[10px] text-slate-600 leading-snug pt-2">
-            Ask about orbital mechanics, gravity, chaos theory, or the live simulation — current body positions, energy, momentum and more are included automatically.
+          <div className="space-y-1.5 pt-1">
+            <div className="text-[9px] text-slate-600">SUGGESTED QUESTIONS</div>
+            {SUGGESTED.map((q) => (
+              <button
+                key={q}
+                onClick={() => onSend(q)}
+                disabled={loading}
+                className="block w-full text-left text-[10px] text-slate-400 border border-white/8 px-2 py-1.5 hover:border-cyan-400/30 hover:text-cyan-200 transition-colors"
+              >
+                {q}
+              </button>
+            ))}
           </div>
         )}
         {messages.map((m, i) => (
           <div key={i} className={`text-[11px] leading-snug ${m.role === 'user' ? 'text-right' : 'text-left'}`}>
-            <span
-              className={`inline-block px-2 py-1 max-w-[90%] whitespace-pre-wrap text-left ${
-                m.role === 'user' ? 'bg-cyan-400/10 text-cyan-100 border border-cyan-400/20' : 'bg-white/5 text-slate-200 border border-white/10'
-              }`}
-            >
+            <span className={`inline-block px-2 py-1 max-w-[92%] whitespace-pre-wrap text-left ${
+              m.role === 'user'
+                ? 'bg-cyan-400/10 text-cyan-100 border border-cyan-400/20'
+                : 'bg-white/5 text-slate-200 border border-white/10'
+            }`}>
               {m.content}
             </span>
           </div>
         ))}
-        {loading && <div className="text-[10px] text-slate-500">thinking…</div>}
-        {error && <div className="text-[10px] text-amber-300 border border-amber-400/30 bg-amber-950/40 px-2 py-1">{error}</div>}
+        {loading && (
+          <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
+            <span className="animate-pulse">●</span> thinking…
+          </div>
+        )}
+        {error && (
+          <div className="text-[10px] text-amber-300 border border-amber-400/30 bg-amber-950/40 px-2 py-1">{error}</div>
+        )}
       </div>
 
-      <div className="flex items-center gap-1.5 px-2 py-2 border-t border-white/10">
+      {/* Input */}
+      <div className="flex items-center gap-1.5 px-2 py-2 border-t border-white/10 shrink-0">
         <input
           type="text"
           value={input}
           onChange={(e) => onInputChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder="Ask about the simulation…"
+          placeholder={chatMode === 'quiz' ? 'Type A, B, C or D…' : chatMode === 'judge' ? 'Answer the judge…' : 'Ask or type a command…'}
           className="flex-1 bg-black/60 border border-white/15 text-slate-200 px-2 py-1.5 text-[11px]"
         />
         <button
-          onClick={onSend}
+          onClick={() => onSend()}
           disabled={loading || !input.trim()}
           className="px-2.5 py-1.5 border border-cyan-400/40 text-cyan-200 text-[11px] disabled:opacity-40 hover:bg-cyan-400/10"
         >
