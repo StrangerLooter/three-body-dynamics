@@ -555,8 +555,7 @@ export default function ThreeBodySimulator() {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState(null);
   const [groqKey, setGroqKey] = useState('');
-  const [groqModel, setGroqModel] = useState('llama-3.3-70b-versatile');
-  const [showChatSettings, setShowChatSettings] = useState(false);
+  const [groqModel] = useState('llama-3.3-70b-versatile');
   const chatScrollRef = useRef(null);
 
   useEffect(() => {
@@ -576,10 +575,6 @@ export default function ThreeBodySimulator() {
   const saveGroqKey = (v) => {
     setGroqKey(v);
     try { window.localStorage.setItem('groq_api_key', v); } catch (e) {}
-  };
-  const saveGroqModel = (v) => {
-    setGroqModel(v);
-    try { window.localStorage.setItem('groq_model', v); } catch (e) {}
   };
 
   useEffect(() => {
@@ -618,7 +613,7 @@ export default function ThreeBodySimulator() {
     const text = chatInput.trim();
     if (!text || chatLoading) return;
     if (!groqKey) {
-      setChatError('Add your Groq API key first (gear icon above).');
+      setChatError('Something went wrong. Please try again.');
       setShowChatSettings(true);
       return;
     }
@@ -1806,12 +1801,6 @@ export default function ThreeBodySimulator() {
           onSend={sendChatMessage}
           loading={chatLoading}
           error={chatError}
-          groqKey={groqKey}
-          onKeyChange={saveGroqKey}
-          groqModel={groqModel}
-          onModelChange={saveGroqModel}
-          showSettings={showChatSettings}
-          onToggleSettings={() => setShowChatSettings((v) => !v)}
           scrollRef={chatScrollRef}
         />
       )}
@@ -2461,39 +2450,13 @@ function ChatPanel({
     <div className="absolute bottom-20 right-3 z-[35] w-80 max-w-[calc(100vw-1.5rem)] h-96 bg-black/90 backdrop-blur-md border border-white/15 flex flex-col font-mono">
       <div className="flex items-center justify-between px-3 py-2 border-b border-white/10">
         <span className="text-[10px] tracking-[0.2em] text-slate-200">AI ASSISTANT</span>
-        <div className="flex items-center gap-2">
-          <button onClick={onToggleSettings} aria-label="Chat settings" title="API key / model" className="text-slate-500 hover:text-cyan-300 text-xs">⚙</button>
-          <button onClick={onClose} aria-label="Close AI assistant" className="text-slate-500 hover:text-cyan-300 text-sm">✕</button>
-        </div>
+        <button onClick={onClose} aria-label="Close AI assistant" className="text-slate-500 hover:text-cyan-300 text-sm">✕</button>
       </div>
 
-      {showSettings && (
-        <div className="px-3 py-2 border-b border-white/10 space-y-1.5 bg-white/[0.02]">
-          <div className="text-[9px] text-slate-500">GROQ API KEY</div>
-          <input
-            type="password"
-            value={groqKey}
-            onChange={(e) => onKeyChange(e.target.value)}
-            placeholder="gsk_..."
-            className="w-full bg-black/60 border border-white/15 text-cyan-200 px-2 py-1 text-[10px]"
-          />
-          <div className="text-[9px] text-slate-500 pt-1">MODEL</div>
-          <input
-            type="text"
-            value={groqModel}
-            onChange={(e) => onModelChange(e.target.value)}
-            className="w-full bg-black/60 border border-white/15 text-cyan-200 px-2 py-1 text-[10px]"
-          />
-          <div className="text-[9px] text-slate-600 leading-snug pt-1">
-            Stored only in this browser's local storage and sent directly from your browser to Groq — never touches any server of ours. If a model name errors out, check Groq's current model list and update it here.
-          </div>
-        </div>
-      )}
-
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
-        {messages.length === 0 && !showSettings && (
+        {messages.length === 0 && (
           <div className="text-[10px] text-slate-600 leading-snug pt-2">
-            Ask about orbital mechanics, gravity, chaos theory, or the live simulation — masses, energy, momentum, and current positions are sent along automatically. Add a Groq API key (gear icon) to get started.
+            Ask about orbital mechanics, gravity, chaos theory, or the live simulation — current body positions, energy, momentum and more are included automatically.
           </div>
         )}
         {messages.map((m, i) => (
