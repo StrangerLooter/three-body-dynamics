@@ -559,7 +559,6 @@ export default function ThreeBodySimulator() {
   const [quizActive, setQuizActive] = useState(false);
   const [groqKey, setGroqKey] = useState('');
   const [groqModel] = useState('openai/gpt-oss-120b');
-  const chatScrollRef = useRef(null);
 
   useEffect(() => {
     try {
@@ -580,6 +579,32 @@ export default function ThreeBodySimulator() {
   useEffect(() => {
     if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
   }, [chatMessages, chatLoading]);
+
+  // Strip <think>...</think> blocks that reasoning models emit internally
+  const stripThinkTags = (text) =>
+    text.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^\s+/, '').trim();
+
+  // TTS — speaks narration aloud using browser Web Speech API
+  const speakText = (text) => {
+    try {
+      if (!window.speechSynthesis) return;
+      window.speechSynthesis.cancel();
+      const clean = text.replace(/[🎙●▶⏸⏭⟲✓💥⭐🔬🌀💡🔍]/gu, '').trim();
+      const utt = new window.SpeechSynthesisUtterance(clean);
+      utt.rate = 0.95;
+      utt.pitch = 1.05;
+      utt.volume = 1.0;
+      // prefer a natural English voice if available
+      const voices = window.speechSynthesis.getVoices();
+      const eng = voices.find((v) => v.lang.startsWith('en') && !v.name.includes('Google'));
+      if (eng) utt.voice = eng;
+      window.speechSynthesis.speak(utt);
+    } catch (e) { /* TTS not available — silently skip */ }
+  };
+
+  const stopSpeech = () => {
+    try { window.speechSynthesis?.cancel(); } catch (e) {}
+  };
 
   const buildSimSnapshot = () => {
     const s = simRef.current;
@@ -606,40 +631,59 @@ export default function ThreeBodySimulator() {
     ].join('\n');
   };
 
+  // Mode-specific system prompts — all include the team and response-format rules
+  const TEAM_LINE = 'Project team: Ram, Abhishek, and Mukul. If asked who built/developed this or who the team is, answer exactly: Ram, Abhishek, and Mukul. Do not invent roles or additional members.';
+  const FORMAT_RULES = 'Response rules: Be concise and scientifically accurate. Aim for 3-6 sentences for most answers. Use plain-text math notation (^, sqrt(), *). Do NOT output <think>, internal reasoning, or chain-of-thought — only the final answer. Structure answers clearly with short paragraphs if needed. Target audience: college physics students.';
+
   const SYSTEM_PROMPTS = {
     normal:
-      'You are an AI physics tutor inside a live 3D Three-Body Problem simulator (Newtonian gravity, RK4/Verlet/Euler integrators, Chaos Lab, gravitational field viz). ' +
-      'Answer questions about orbital mechanics, gravity, conservation laws, numerical integration, and chaos theory. ' +
-      'Use the live simulation data when relevant. Keep answers concise. Use plain-text math (^, *, sqrt()).\n\nCURRENT SIMULATION STATE:\n',
+      `You are an AI physics tutor inside a live 3D Three-Body Problem simulator (Newtonian gravity, RK4/Verlet/Euler integrators, Chaos Lab, gravitational field visualisation). ` +
+      `Answer questions about orbital mechanics, gravity, conservation laws, numerical integration, and chaos theory. Use the live simulation data when relevant. ` +
+      `${FORMAT_RULES} ${TEAM_LINE}\n\nCURRENT SIMULATION STATE:\n`,
     narrate:
-      'You are a live science narrator for a 3D Three-Body Problem simulator. ' +
-      'Describe what is CURRENTLY happening in 2-3 vivid, engaging sentences — like a nature documentary voiceover. ' +
-      'Mention specific values (energy, distances, speeds) from the data. Be dramatic but scientifically accurate.\n\nCURRENT SIMULATION STATE:\n',
+      `You are a live science narrator for a 3D Three-Body Problem simulator. ` +
+      `In exactly 2-3 sentences, describe what is CURRENTLY happening — like a nature documentary voiceover. ` +
+      `Mention at least one specific value (energy, speed, distance) from the data. Be vivid but scientifically accurate. ` +
+      `Do NOT output <think> tags or internal reasoning. Output only the narration text, nothing else. ${TEAM_LINE}\n\nCURRENT SIMULATION STATE:\n`,
     quiz:
-      'You are a physics quiz master for a Three-Body Problem simulator. ' +
-      'Ask ONE short multiple-choice question (A/B/C/D) based on what is currently happening in the simulation. ' +
-      'Make it educational and directly connected to the live data shown. After asking, wait for the user\'s answer.\n\nCURRENT SIMULATION STATE:\n',
+      `You are a physics quiz master for a Three-Body Problem simulator. ` +
+      `Ask ONE multiple-choice question (A/B/C/D) directly related to what is happening in the simulation right now. ` +
+      `Format: Question on first line, then A) B) C) D) on separate lines. Keep it educational and concise. ` +
+      `Do NOT output <think> tags. ${FORMAT_RULES} ${TEAM_LINE}\n\nCURRENT SIMULATION STATE:\n`,
     judge:
-      'You are a tough but fair physics professor judging a student\'s Three-Body Problem simulator at a college model competition. ' +
-      'Ask ONE probing question about the physics, numerical methods, or implementation to test the student\'s depth of understanding. ' +
-      'Be specific, reference the current simulation state, and vary between easy and hard questions.\n\nCURRENT SIMULATION STATE:\n',
+      `You are a physics professor judging a student's Three-Body Problem simulator at a college model competition. ` +
+      `Ask ONE focused question about the physics, numerical methods, or implementation. Reference the current simulation state. ` +
+      `Alternate between conceptual and technical questions. Be specific and rigorous. ` +
+      `Do NOT output <think> tags. ${FORMAT_RULES} ${TEAM_LINE}\n\nCURRENT SIMULATION STATE:\n`,
   };
 
+  // Shared Groq API call — model params tuned per mode
   const groqCall = async (messages, mode = 'normal') => {
     const systemPrompt = (SYSTEM_PROMPTS[mode] || SYSTEM_PROMPTS.normal) + buildSimSnapshot();
+
+    // Temperature: low for accuracy (chat/quiz/judge), slightly higher for creative narration
+    const temperature = mode === 'narrate' ? 0.6 : 0.25;
+    // Max tokens: narration is short; quiz/judge/chat need more room
+    const max_tokens = mode === 'narrate' ? 120 : 400;
+
+    const body = {
+      model: groqModel,
+      messages: [{ role: 'system', content: systemPrompt }, ...messages.slice(-10)],
+      temperature,
+      max_tokens,
+      // Ask the model to hide its internal reasoning from the output
+      reasoning_effort: 'default',
+    };
+
     const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${groqKey}` },
-      body: JSON.stringify({
-        model: groqModel,
-        messages: [{ role: 'system', content: systemPrompt }, ...messages.slice(-12)],
-        temperature: mode === 'narrate' ? 0.75 : 0.4,
-        max_tokens: mode === 'narrate' ? 200 : 700,
-      }),
+      body: JSON.stringify(body),
     });
-    if (!res.ok) throw new Error(`Groq ${res.status}: ${(await res.text()).slice(0, 200)}`);
+    if (!res.ok) throw new Error(`Groq ${res.status}: ${(await res.text()).slice(0, 220)}`);
     const data = await res.json();
-    return data.choices?.[0]?.message?.content || '(empty response)';
+    const raw = data.choices?.[0]?.message?.content || '(empty response)';
+    return stripThinkTags(raw);
   };
 
   const sendChatMessage = async (overrideText) => {
@@ -652,60 +696,46 @@ export default function ThreeBodySimulator() {
     setChatLoading(true);
     setChatError(null);
     try {
-      // Simulation control commands
       const lower = text.toLowerCase();
       let simControlReply = null;
-      if (lower.includes('pause') || lower.includes('stop')) {
-        simRef.current.running = false;
-        setUi((p) => ({ ...p, running: false }));
+
+      // Simulation control via natural language
+      if (lower.match(/\bpause\b|\bstop\b/)) {
+        simRef.current.running = false; setUi((p) => ({ ...p, running: false }));
         simControlReply = '⏸ Simulation paused.';
-      } else if (lower.includes('play') || lower.includes('start') || lower.includes('resume')) {
-        simRef.current.running = true;
-        setUi((p) => ({ ...p, running: true }));
+      } else if (lower.match(/\bplay\b|\bstart\b|\bresume\b/)) {
+        simRef.current.running = true; setUi((p) => ({ ...p, running: true }));
         simControlReply = '▶ Simulation running.';
-      } else if (lower.includes('reset')) {
-        resetSim();
-        simControlReply = '⟲ Simulation reset to initial conditions.';
-      } else if (lower.match(/speed.*(0\.1|0\.25|0\.5|1|2|10|100)/)) {
-        const m = lower.match(/(\d+\.?\d*)\s*x?/);
-        const spd = m ? parseFloat(m[1]) : 1;
-        if ([0.1,0.25,0.5,1,2,10,100].includes(spd)) {
-          simRef.current.speed = spd;
-          setUi((p) => ({ ...p, speed: spd }));
+      } else if (lower.match(/\breset\b/)) {
+        resetSim(); simControlReply = '⟲ Reset to initial conditions.';
+      } else if (lower.match(/speed.*?(0\.1|0\.25|0\.5|\b1\b|\b2\b|\b10\b|\b100\b)/)) {
+        const m = lower.match(/(0\.1|0\.25|0\.5|\b1\b|\b2\b|\b10\b|\b100\b)/);
+        const spd = m ? parseFloat(m[1]) : null;
+        if (spd && [0.1,0.25,0.5,1,2,10,100].includes(spd)) {
+          simRef.current.speed = spd; setUi((p) => ({ ...p, speed: spd }));
           simControlReply = `⚡ Speed set to ${spd}×.`;
         }
       } else if (lower.includes('figure') || lower.includes('figure-8') || lower.includes('figure8')) {
-        loadPreset('figureEight');
-        simControlReply = '🌀 Loaded Figure-8 Orbit preset.';
+        loadPreset('figureEight'); simControlReply = '🌀 Loaded Figure-8 Orbit.';
       } else if (lower.includes('chaos') && lower.includes('preset')) {
-        loadPreset('chaos');
-        simControlReply = '💥 Loaded Equal-Mass Chaos preset.';
+        loadPreset('chaos'); simControlReply = '💥 Loaded Equal-Mass Chaos.';
       } else if (lower.includes('hierarchical')) {
-        loadPreset('hierarchical');
-        simControlReply = '⭐ Loaded Hierarchical Triple preset.';
+        loadPreset('hierarchical'); simControlReply = '⭐ Loaded Hierarchical Triple.';
       } else if (lower.includes('restricted')) {
-        loadPreset('restricted');
-        simControlReply = '🔬 Loaded Restricted Three-Body preset.';
+        loadPreset('restricted'); simControlReply = '🔬 Loaded Restricted Three-Body.';
       } else if (lower.includes('trail') && lower.includes('on')) {
-        simRef.current.trailsOn = true;
-        setUi((p) => ({ ...p, trailsOn: true }));
+        simRef.current.trailsOn = true; setUi((p) => ({ ...p, trailsOn: true }));
         simControlReply = '✓ Trails enabled.';
       } else if (lower.includes('trail') && lower.includes('off')) {
-        simRef.current.trailsOn = false;
-        setUi((p) => ({ ...p, trailsOn: false }));
+        simRef.current.trailsOn = false; setUi((p) => ({ ...p, trailsOn: false }));
         simControlReply = '✓ Trails disabled.';
       }
 
       let reply;
       if (simControlReply) {
-        // Append a short AI comment after the control action
-        const aiComment = await groqCall(
-          [...nextMessages, { role: 'assistant', content: simControlReply }],
-          'normal'
-        );
+        const aiComment = await groqCall([...nextMessages, { role: 'assistant', content: simControlReply }], 'normal');
         reply = `${simControlReply}\n\n${aiComment}`;
       } else {
-        // Detect quiz answer if quiz mode is active
         reply = await groqCall(nextMessages, chatMode);
       }
       setChatMessages((m) => [...m, { role: 'assistant', content: reply }]);
@@ -716,45 +746,52 @@ export default function ThreeBodySimulator() {
     }
   };
 
-  // --- Narrate mode: auto-commentary every 8 seconds ---
+  // Narration — auto-commentary with TTS. One request at a time, guarded by a flag.
+  const narrateRunningRef = useRef(false);
+
   const startNarrate = () => {
     setChatMode('narrate');
-    const run = async () => {
-      setChatLoading(true);
+    stopSpeech();
+    if (narrateTimer) { clearInterval(narrateTimer); setNarrateTimer(null); }
+
+    const runOnce = async () => {
+      if (narrateRunningRef.current) return; // prevent overlap
+      narrateRunningRef.current = true;
       try {
         const reply = await groqCall([], 'narrate');
-        setChatMessages((m) => [...m, { role: 'assistant', content: '🎙 ' + reply }]);
+        const msg = '🎙 ' + reply;
+        setChatMessages((m) => [...m, { role: 'assistant', content: msg }]);
+        speakText(reply);
       } catch (e) { /* silent */ } finally {
-        setChatLoading(false);
+        narrateRunningRef.current = false;
       }
     };
-    run();
-    const id = setInterval(run, 8000);
+
+    runOnce();
+    const id = setInterval(runOnce, 9000); // 9 s — longer than typical TTS duration
     setNarrateTimer(id);
   };
 
   const stopNarrate = () => {
     if (narrateTimer) { clearInterval(narrateTimer); setNarrateTimer(null); }
+    stopSpeech();
+    narrateRunningRef.current = false;
     setChatMode('normal');
   };
 
-  // --- Explain button ---
   const explainNow = async () => {
     if (chatLoading) return;
-    const prompt = 'In 3-4 sentences, explain what is currently happening in this simulation — the orbital configuration, stability, and what is physically interesting about it right now.';
-    await sendChatMessage(prompt);
+    await sendChatMessage('Explain what is currently happening in this simulation in 3-4 sentences — the orbital configuration, energy state, and what makes it physically interesting right now.');
   };
 
-  // --- Export chat as text ---
   const exportChat = () => {
     if (!chatMessages.length) return;
     const lines = chatMessages.map((m) => `[${m.role.toUpperCase()}]\n${m.content}`).join('\n\n---\n\n');
-    const blob = new Blob([`THREE-BODY DYNAMICS — AI Chat Export\n${'='.repeat(40)}\n\n${lines}`], { type: 'text/plain' });
+    const blob = new Blob([`THREE-BODY DYNAMICS — AI Chat\n${'='.repeat(40)}\n\n${lines}`], { type: 'text/plain' });
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'chat-notes.txt'; a.click();
   };
 
-  // Cleanup narrate on unmount
-  useEffect(() => () => { if (narrateTimer) clearInterval(narrateTimer); }, [narrateTimer]);
+  useEffect(() => () => { if (narrateTimer) clearInterval(narrateTimer); stopSpeech(); }, [narrateTimer]);
 
   useEffect(() => {
     analysisOpenRef.current = ui.analysisOpen;
