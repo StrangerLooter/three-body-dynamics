@@ -1,18 +1,10 @@
 import React, { useRef, useEffect } from 'react';
 
 const SUGGESTED_QUESTIONS = [
-  'Why is total energy drifting?',
-  'Is this orbital configuration chaotic?',
-  'What will happen next in this system?',
-  'Explain conservation of momentum here',
-  'Why do bodies speed up when close?',
-];
-
-const CHAT_MODES = [
-  { key: 'normal', label: '💬 Chat', title: 'Interactive Physics Q&A' },
-  { key: 'narrate', label: '🎙 Narrate', title: 'Documentary voiceover every 9s' },
-  { key: 'quiz', label: '📝 Quiz', title: 'Multiple-choice physics quiz' },
-  { key: 'judge', label: '🎓 Judge', title: 'Competition judge testing questions' },
+  'Why is the three-body problem analytically unsolvable?',
+  'What is the physical significance of the Lyapunov exponent?',
+  'Explain how Velocity Verlet conserves phase space volume.',
+  'How do Lagrange points form in this system?',
 ];
 
 export function ChatPanel({
@@ -51,67 +43,108 @@ export function ChatPanel({
 
   return (
     <div
-      className="absolute bottom-16 right-3 z-[35] w-88 max-w-[calc(100vw-1.5rem)] bg-[#040812]/95 backdrop-blur-md border border-white/20 flex flex-col font-mono shadow-[0_0_30px_rgba(0,0,0,0.8)]"
-      style={{ height: '27rem' }}
+      className="fixed inset-x-2 bottom-16 sm:inset-x-auto sm:right-3 sm:bottom-16 w-auto sm:w-92 h-[72vh] sm:h-[28rem] max-h-[88vh] bg-[#02050c]/95 backdrop-blur-lg border-2 border-cyan-400/30 rounded-xs shadow-[0_0_35px_rgba(0,0,0,0.85)] z-40 flex flex-col font-mono select-none"
     >
-      {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 shrink-0 bg-white/5">
+      {/* Panel header */}
+      <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 bg-white/5 shrink-0">
         <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-          <span className="text-[11px] tracking-[0.2em] text-slate-200 font-semibold">
+          <span className="text-cyan-300 text-sm">◈</span>
+          <span className="text-xs text-slate-100 font-semibold tracking-wider">
             AI PHYSICS TUTOR
           </span>
+          <span className="text-[9px] px-1.5 py-0.2 border border-cyan-400/40 bg-cyan-950/40 text-cyan-300">
+            GROQ
+          </span>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onExportChat}
+            title="Export conversation history (TXT)"
+            aria-label="Export chat"
+            className="text-slate-400 hover:text-cyan-300 text-xs px-1"
+          >
+            ↓
+          </button>
           <button
             onClick={onOpenApiKeyModal}
             title="Configure Groq API Key"
-            className="text-slate-400 hover:text-cyan-300 text-xs transition-colors"
+            aria-label="Configure API Key"
+            className="text-slate-400 hover:text-cyan-300 text-xs px-1"
           >
             ⚙
           </button>
           <button
-            onClick={onExportChat}
-            title="Export conversation history"
-            className="text-slate-400 hover:text-cyan-300 text-xs transition-colors"
-          >
-            ⬇
-          </button>
-          <button
             onClick={onClose}
-            aria-label="Close chat"
-            className="text-slate-400 hover:text-cyan-300 text-sm transition-colors"
+            aria-label="Close chat panel"
+            className="text-slate-400 hover:text-cyan-300 text-sm px-1 font-bold"
           >
             ✕
           </button>
         </div>
       </div>
 
-      {/* Mode selection row */}
-      <div className="flex gap-1 px-2 pt-2 pb-1.5 shrink-0 overflow-x-auto border-b border-white/5">
-        {CHAT_MODES.map((m) => (
+      {/* Mode selection buttons */}
+      <div className="flex items-center gap-1 px-2 py-1.5 border-b border-white/5 bg-black/40 overflow-x-auto shrink-0">
+        <button
+          onClick={() => {
+            onSetMode('normal');
+            if (narrateActive) onStopNarrate();
+          }}
+          className={`text-[9px] px-2 py-1 border whitespace-nowrap tracking-wider transition-colors ${
+            chatMode === 'normal'
+              ? 'border-cyan-400/70 text-cyan-200 bg-cyan-400/15 font-semibold'
+              : 'border-white/10 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          TUTOR
+        </button>
+
+        {!narrateActive ? (
           <button
-            key={m.key}
-            title={m.title}
-            onClick={() => {
-              onSetMode(m.key);
-              if (m.key === 'narrate') onStartNarrate();
-              else onStopNarrate();
-              if (m.key === 'quiz') onQuiz();
-              if (m.key === 'judge') onJudge();
-            }}
-            className={`whitespace-nowrap text-[9px] px-2 py-1 border transition-all ${
-              chatMode === m.key
-                ? 'border-cyan-400/70 text-cyan-200 bg-cyan-400/15 font-semibold'
-                : 'border-white/10 text-slate-400 hover:text-slate-200 hover:border-white/20'
-            }`}
+            onClick={onStartNarrate}
+            className="text-[9px] px-2 py-1 border border-white/10 text-slate-400 hover:text-amber-300 hover:border-amber-400/40 whitespace-nowrap tracking-wider transition-colors"
           >
-            {m.label}
+            🎙 NARRATE
           </button>
-        ))}
+        ) : (
+          <button
+            onClick={onStopNarrate}
+            className="text-[9px] px-2 py-1 border border-amber-400/70 text-amber-200 bg-amber-400/20 font-semibold animate-pulse whitespace-nowrap tracking-wider transition-colors"
+          >
+            ■ STOP NARRATE
+          </button>
+        )}
+
+        <button
+          onClick={() => {
+            onSetMode('quiz');
+            onQuiz();
+          }}
+          className={`text-[9px] px-2 py-1 border whitespace-nowrap tracking-wider transition-colors ${
+            chatMode === 'quiz'
+              ? 'border-cyan-400/70 text-cyan-200 bg-cyan-400/15 font-semibold'
+              : 'border-white/10 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          QUIZ
+        </button>
+
+        <button
+          onClick={() => {
+            onSetMode('judge');
+            onJudge();
+          }}
+          className={`text-[9px] px-2 py-1 border whitespace-nowrap tracking-wider transition-colors ${
+            chatMode === 'judge'
+              ? 'border-cyan-400/70 text-cyan-200 bg-cyan-400/15 font-semibold'
+              : 'border-white/10 text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          JUDGE
+        </button>
       </div>
 
-      {/* Quick-action buttons */}
+      {/* Quick context triggers */}
       <div className="flex gap-1.5 px-2 py-1.5 shrink-0 border-b border-white/5 bg-white/2">
         <button
           onClick={onExplain}
@@ -135,7 +168,7 @@ export function ChatPanel({
       </div>
 
       {/* Message container */}
-      <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-3 space-y-2.5 min-h-0">
+      <div ref={chatScrollRef} className="flex-1 overflow-y-auto p-3 space-y-2.5 min-h-0 custom-scrollbar">
         {messages.length === 0 && (
           <div className="space-y-2 pt-1">
             <div className="text-[10px] text-slate-400 font-semibold tracking-wider">

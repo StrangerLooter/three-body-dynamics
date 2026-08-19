@@ -21,63 +21,21 @@ import {
 import {
   BODY_COLORS,
   BODY_HEX,
-  BODY_TEXTURES,
-  BODY_ROT_SPEED,
+  BODY_NAMES,
   TRAIL_LENGTH,
 } from '../constants/bodies.js';
+import { CelestialRenderer } from '../visuals/CelestialRenderer.js';
 import { audio } from '../services/audioService.js';
-
-// Custom Atmospheric Fresnel Glow Shader
-const AtmosphereShader = {
-  vertexShader: `
-    varying vec3 vNormal;
-    varying vec3 vPositionNormal;
-    void main() {
-      vNormal = normalize(normalMatrix * normal);
-      vPositionNormal = normalize((modelViewMatrix * vec4(position, 1.0)).xyz);
-      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-    }
-  `,
-  fragmentShader: `
-    uniform vec3 color;
-    uniform float intensity;
-    uniform float power;
-    varying vec3 vNormal;
-    varying vec3 vPositionNormal;
-    void main() {
-      float fresnel = pow(1.0 - abs(dot(vNormal, -vPositionNormal)), power);
-      gl_FragColor = vec4(color, fresnel * intensity);
-    }
-  `,
-};
-
-function createAtmosphereMesh(radius, colorHex) {
-  const geo = new THREE.SphereGeometry(radius * 1.28, 32, 32);
-  const mat = new THREE.ShaderMaterial({
-    vertexShader: AtmosphereShader.vertexShader,
-    fragmentShader: AtmosphereShader.fragmentShader,
-    uniforms: {
-      color: { value: new THREE.Color(colorHex) },
-      intensity: { value: 0.85 },
-      power: { value: 2.6 },
-    },
-    blending: THREE.AdditiveBlending,
-    side: THREE.BackSide,
-    transparent: true,
-    depthWrite: false,
-  });
-  return new THREE.Mesh(geo, mat);
-}
 
 function buildDeepSpaceSkybox() {
   const root = new THREE.Group();
 
   // 1. Multi-spectrum stellar layers (O/B Blue giants, G White/Yellow, M Red Dwarfs)
   const starSpectra = [
-    { count: 1800, radius: 80, size: 0.12, color: 0x8bbaff, opacity: 0.75 }, // Blue Giants
-    { count: 1600, radius: 65, size: 0.14, color: 0xffffff, opacity: 0.9 },  // White Main-Sequence
-    { count: 900,  radius: 50, size: 0.16, color: 0xffdf80, opacity: 0.85 }, // Yellow Stars
-    { count: 600,  radius: 40, size: 0.18, color: 0xff8c73, opacity: 0.95 }, // Red Dwarfs
+    { count: 1800, radius: 80, size: 0.12, color: 0x8bbaff, opacity: 0.75 },
+    { count: 1600, radius: 65, size: 0.14, color: 0xffffff, opacity: 0.9 },
+    { count: 900,  radius: 50, size: 0.16, color: 0xffdf80, opacity: 0.85 },
+    { count: 600,  radius: 40, size: 0.18, color: 0xff8c73, opacity: 0.95 },
   ];
 
   starSpectra.forEach((s) => {
@@ -107,9 +65,9 @@ function buildDeepSpaceSkybox() {
   const NEBULA_COUNT = 350;
   const nebPos = new Float32Array(NEBULA_COUNT * 3);
   const nebColors = new Float32Array(NEBULA_COUNT * 3);
-  const colorA = new THREE.Color(0x38bdf8); // Cyan dust
-  const colorB = new THREE.Color(0xa855f7); // Violet dust
-  const colorC = new THREE.Color(0xf59e0b); // Amber dust
+  const colorA = new THREE.Color(0x38bdf8);
+  const colorB = new THREE.Color(0xa855f7);
+  const colorC = new THREE.Color(0xf59e0b);
 
   for (let i = 0; i < NEBULA_COUNT; i++) {
     const r = 35 + 30 * Math.random();
@@ -151,15 +109,15 @@ export function useThreeSimulation({
   onCamModeChange,
   onTelemetryUpdate,
   onChartTick,
+  onWarningAlert,
   onWebglError,
 }) {
   const mountRef = useRef(null);
   const rendererRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
+  const celestialRendererRef = useRef(null);
 
-  const bodyMeshesRef = useRef([]);
-  const atmosphereMeshesRef = useRef([]);
   const bodyMeshesBRef = useRef([]);
   const trailLinesRef = useRef([]);
   const trailBuffersRef = useRef([]);
@@ -179,6 +137,7 @@ export function useThreeSimulation({
   const fieldParticlesRef = useRef(null);
   const fieldParticleDataRef = useRef([]);
 
+  const lastWarningTimeRef = useRef(0);
   const raycasterRef = useRef(new THREE.Raycaster());
   const dragRef = useRef({ dragging: false, panning: false, lastX: 0, lastY: 0, moved: 0 });
   const clickRef = useRef({ time: 0, index: -1 });
@@ -254,7 +213,6 @@ export function useThreeSimulation({
         stPos[idx] = x;
         stPos[idx + 1] = ST_BASE_Y;
         stPos[idx + 2] = z;
-        // Default flat space color (deep subtle blue-cyan)
         stColors[idx] = 0.35;
         stColors[idx + 1] = 0.65;
         stColors[idx + 2] = 0.85;
@@ -313,61 +271,17 @@ export function useThreeSimulation({
     scene.add(shockwaveGroup);
     shockwaveGroupRef.current = shockwaveGroup;
 
-    // Celestial Bodies & Atmosphere Meshes
+    // Instantiate Modular Celestial Renderer
     const sim = simRef.current;
-    bodyMeshesRef.current = [];
-    atmosphereMeshesRef.current = [];
+    const celestialRenderer = new CelestialRenderer(scene, sim.radii);
+    celestialRendererRef.current = celestialRenderer;
+
+    // Velocity-Gradient Trails & Vector Arrows Setup
     trailLinesRef.current = [];
     trailBuffersRef.current = [];
     arrowsRef.current = [];
-    const textureLoader = new THREE.TextureLoader();
 
     for (let i = 0; i < 3; i++) {
-      const radius = sim.radii[i] || 0.15;
-      const geo = new THREE.SphereGeometry(radius, 48, 48);
-      const mat = new THREE.MeshStandardMaterial({
-        color: 0xffffff,
-        emissive: BODY_COLORS[i],
-        emissiveIntensity: 0.15,
-        roughness: 0.65,
-        metalness: 0.1,
-      });
-
-      textureLoader.load(
-        BODY_TEXTURES[i],
-        (tex) => {
-          tex.colorSpace = THREE.SRGBColorSpace;
-          mat.map = tex;
-          mat.emissiveIntensity = 0.08;
-          mat.needsUpdate = true;
-        },
-        undefined,
-        () => {}
-      );
-
-      const mesh = new THREE.Mesh(geo, mat);
-      scene.add(mesh);
-      bodyMeshesRef.current.push(mesh);
-
-      // Atmospheric Rayleigh Fresnel Glow
-      const atmosphere = createAtmosphereMesh(radius, BODY_HEX[i]);
-      atmosphere.visible = sim.showAtmosphere !== false;
-      scene.add(atmosphere);
-      atmosphereMeshesRef.current.push(atmosphere);
-
-      // Core glow aura
-      const glowGeo = new THREE.SphereGeometry(radius * 1.8, 24, 24);
-      const glowMat = new THREE.MeshBasicMaterial({
-        color: BODY_COLORS[i],
-        transparent: true,
-        opacity: 0.14,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-      });
-      const glow = new THREE.Mesh(glowGeo, glowMat);
-      mesh.add(glow);
-
-      // Velocity-Gradient Orbital Trails
       const trailPos = new Float32Array(TRAIL_LENGTH * 3);
       const trailCols = new Float32Array(TRAIL_LENGTH * 3);
       const tgeo = new THREE.BufferGeometry();
@@ -441,7 +355,6 @@ export function useThreeSimulation({
     }
     const gridCount = fieldGridPoints.length;
 
-    // Field Lines
     const linesPos = new Float32Array(gridCount * 2 * 3);
     const linesGeo = new THREE.BufferGeometry();
     linesGeo.setAttribute('position', new THREE.BufferAttribute(linesPos, 3));
@@ -455,7 +368,6 @@ export function useThreeSimulation({
     scene.add(fieldLines);
     fieldLinesRef.current = fieldLines;
 
-    // Vector Field
     const vecPos = new Float32Array(gridCount * 2 * 3);
     const vecGeo = new THREE.BufferGeometry();
     vecGeo.setAttribute('position', new THREE.BufferAttribute(vecPos, 3));
@@ -469,7 +381,6 @@ export function useThreeSimulation({
     scene.add(fieldVectors);
     fieldVectorsRef.current = fieldVectors;
 
-    // Potential Contours
     const potPos = new Float32Array(gridCount * 3);
     const potCol = new Float32Array(gridCount * 3);
     fieldGridPoints.forEach((p, i) => {
@@ -492,7 +403,6 @@ export function useThreeSimulation({
     scene.add(fieldPotential);
     fieldPotentialRef.current = fieldPotential;
 
-    // Particle Flow Tracers
     const PARTICLE_COUNT = 220;
     const partPos = new Float32Array(PARTICLE_COUNT * 3);
     const particleData = [];
@@ -525,7 +435,6 @@ export function useThreeSimulation({
 
     sim.initialEnergy = computeEnergy(sim.state, sim.masses, sim.G).total;
 
-    // Trigger Tidal Shockwave Pulse
     function spawnShockwave(pos, colorHex = 0x6fd3ff) {
       const ringGeo = new THREE.RingGeometry(0.05, 0.08, 32);
       const ringMat = new THREE.MeshBasicMaterial({
@@ -555,7 +464,6 @@ export function useThreeSimulation({
         buf.pos[idx + 1] = pos[1];
         buf.pos[idx + 2] = pos[2];
 
-        // Velocity-Gradient Trail Coloring: White-hot amber at high speed, cyan/violet at cruise
         const speedRatio = Math.min(1.0, speed / 2.5);
         const baseColor = new THREE.Color(BODY_HEX[i]);
         const hotColor = new THREE.Color(0xffffff);
@@ -569,7 +477,6 @@ export function useThreeSimulation({
       }
     }
 
-    // Interaction handlers
     const dom = renderer.domElement;
 
     function pickBodyAt(clientX, clientY) {
@@ -579,8 +486,8 @@ export function useThreeSimulation({
         -((clientY - rect.top) / rect.height) * 2 + 1
       );
       raycasterRef.current.setFromCamera(ndc, camera);
-      const hits = raycasterRef.current.intersectObjects(bodyMeshesRef.current);
-      if (hits.length) return bodyMeshesRef.current.indexOf(hits[0].object);
+      const hits = raycasterRef.current.intersectObjects(celestialRenderer.bodyMeshes);
+      if (hits.length) return celestialRenderer.bodyMeshes.indexOf(hits[0].object);
       return -1;
     }
 
@@ -674,7 +581,6 @@ export function useThreeSimulation({
     const resizeObserver = new ResizeObserver(onResize);
     resizeObserver.observe(mount);
 
-    // Animation & Physics Loop
     let raf = 0;
     let lastFrameT = performance.now();
     let uiAccum = 0;
@@ -701,7 +607,6 @@ export function useThreeSimulation({
         let remaining = frameDt * s.speed;
         let substeps = 0;
         let maxSubstepSpeed = 0;
-        let currentMinDist = Infinity;
 
         while (remaining > 0 && substeps < 400) {
           substeps++;
@@ -729,7 +634,6 @@ export function useThreeSimulation({
             pushTrailSample();
           } else {
             const minD = minPairDistance(s.state);
-            currentMinDist = Math.min(currentMinDist, minD);
             const closeFactor = minD < 0.08 ? Math.max(0.05, minD / 0.08) : 1;
             const h = Math.min(s.dt * closeFactor, remaining);
             s.state = integrateStep(s.state, s.masses, s.G, h, s.integrator);
@@ -753,19 +657,51 @@ export function useThreeSimulation({
           });
         }
 
-        // Close encounter tidal effects & Gravitational Audio Sonification
-        const minD2 = minPairDistance(s.state);
-        if (minD2 < 0.22 && maxSubstepSpeed > 1.2) {
-          audio.triggerGravitationalChirp(maxSubstepSpeed, minD2);
+        // Close Encounter & Collision Detection with Warning Notifications
+        const distInfo = computePairDistances(s.state);
+        const minD = distInfo.min;
+
+        if (minD < 0.20 && now - lastWarningTimeRef.current > 4500) {
+          lastWarningTimeRef.current = now;
+          let level = 'CAUTION';
+          let title = 'CLOSE ENCOUNTER DETECTED';
+          let desc = 'Timestep automatically reduced to maintain stability.';
+
+          if (minD < 0.05) {
+            level = 'CRITICAL';
+            title = 'POTENTIAL COLLISION IMMINENT!';
+            desc = 'High impact velocity predicted between converging bodies.';
+          } else if (minD < 0.11) {
+            level = 'WARNING';
+            title = 'CLOSE ENCOUNTER DETECTED';
+            desc = 'Orbital periastron compression detected in gravitational well.';
+          }
+
+          // Determine closest pair
+          let pairNames = `${BODY_NAMES[0]} and ${BODY_NAMES[1]}`;
+          if (distInfo.pairs.d02 === minD) pairNames = `${BODY_NAMES[0]} and ${BODY_NAMES[2]}`;
+          if (distInfo.pairs.d12 === minD) pairNames = `${BODY_NAMES[1]} and ${BODY_NAMES[2]}`;
+
+          audio.playWarningAlarm(level);
+          onWarningAlert?.({
+            level,
+            title,
+            bodies: pairNames,
+            description: desc,
+          });
+        }
+
+        if (minD < 0.22 && maxSubstepSpeed > 1.2) {
+          audio.triggerGravitationalChirp(maxSubstepSpeed, minD);
           if (Math.random() < 0.35) {
             spawnShockwave(s.state.pos[0], BODY_COLORS[0]);
           }
         }
 
-        if (!Number.isFinite(minD2) || s.state.pos.some((p) => p.some((c) => !Number.isFinite(c)))) {
+        if (!Number.isFinite(minD) || s.state.pos.some((p) => p.some((c) => !Number.isFinite(c)))) {
           s.running = false;
           s.numericalWarning = 'NUMERICAL INSTABILITY DETECTED — reduce dt or switch to RK4.';
-        } else if (minD2 < 0.05) {
+        } else if (minD < 0.05) {
           s.numericalWarning = 'CLOSE TIDAL ENCOUNTER — timestep softened.';
         } else {
           s.numericalWarning = null;
@@ -787,24 +723,14 @@ export function useThreeSimulation({
         }
       }
 
-      // Sync Body & Atmosphere Meshes
-      for (let i = 0; i < 3; i++) {
-        const p = s.state.pos[i];
-        if (bodyMeshesRef.current[i]) {
-          bodyMeshesRef.current[i].position.set(p[0], p[1], p[2]);
-          bodyMeshesRef.current[i].rotation.y += BODY_ROT_SPEED[i] * frameDt;
-          const isSel = s.selected === i;
-          bodyMeshesRef.current[i].material.emissiveIntensity = isSel
-            ? 0.4
-            : bodyMeshesRef.current[i].material.map
-            ? 0.08
-            : 0.15;
-          bodyMeshesRef.current[i].scale.setScalar(isSel ? 1.18 : 1.0);
-        }
-        if (atmosphereMeshesRef.current[i]) {
-          atmosphereMeshesRef.current[i].position.set(p[0], p[1], p[2]);
-          atmosphereMeshesRef.current[i].visible = s.showAtmosphere !== false;
-        }
+      // Update Celestial Bodies via Modular CelestialRenderer
+      if (celestialRendererRef.current) {
+        celestialRendererRef.current.update(
+          frameDt,
+          s.state,
+          s.selected,
+          s.showAtmosphere !== false
+        );
       }
 
       // Sync Lagrange Points L1 - L5
@@ -927,12 +853,13 @@ export function useThreeSimulation({
         });
       }
 
-      // Direct DOM label positioning
-      if (s.showLabels && labelRefs?.current) {
+      // DOM projected labels
+      if (s.showLabels && labelRefs?.current && celestialRendererRef.current) {
         for (let i = 0; i < 3; i++) {
           const el = labelRefs.current[i];
-          if (!el || !bodyMeshesRef.current[i]) continue;
-          const p = bodyMeshesRef.current[i].position.clone();
+          const mesh = celestialRendererRef.current.bodyMeshes[i];
+          if (!el || !mesh) continue;
+          const p = mesh.position.clone();
           p.project(camera);
           const x = (p.x * 0.5 + 0.5) * mount.clientWidth;
           const y = (-p.y * 0.5 + 0.5) * mount.clientHeight;
@@ -946,7 +873,7 @@ export function useThreeSimulation({
         });
       }
 
-      // Camera Tracking & Smooth Interpolation
+      // Camera Tracking
       const cs = camStateRef.current;
       if (['body0', 'body1', 'body2'].includes(cs.mode)) {
         const idx = Number(cs.mode.slice(4));
@@ -984,7 +911,7 @@ export function useThreeSimulation({
 
       renderer.render(scene, camera);
 
-      // Throttled UI State & Telemetry Updates (~10 Hz)
+      // Throttled UI Updates
       uiAccum += frameDt;
       if (uiAccum > 0.1) {
         uiAccum = 0;
@@ -1005,7 +932,7 @@ export function useThreeSimulation({
         ]);
         const distInfo = computePairDistances(s.state);
 
-        // Spacetime Fabric Deformation & Tension Gradient Coloring
+        // Spacetime Fabric Deformation
         if (s.showSpacetime && spacetimeGridRef.current) {
           const posArr = spacetimeGridRef.current.geometry.attributes.position.array;
           const colArr = spacetimeGridRef.current.geometry.attributes.color.array;
@@ -1017,17 +944,16 @@ export function useThreeSimulation({
             const depth = Math.max(-1.8, u * 0.55);
             posArr[i * 3 + 1] = ST_BASE_Y + depth;
 
-            // Tension color: deep well (purple/amber) -> flat space (cyan)
             const strain = Math.min(1.0, Math.abs(depth) / 1.5);
-            colArr[i * 3] = 0.25 + strain * 0.75;      // Red
-            colArr[i * 3 + 1] = 0.65 - strain * 0.45;  // Green
-            colArr[i * 3 + 2] = 0.95 - strain * 0.35;  // Blue
+            colArr[i * 3] = 0.25 + strain * 0.75;
+            colArr[i * 3 + 1] = 0.65 - strain * 0.45;
+            colArr[i * 3 + 2] = 0.95 - strain * 0.35;
           }
           spacetimeGridRef.current.geometry.attributes.position.needsUpdate = true;
           spacetimeGridRef.current.geometry.attributes.color.needsUpdate = true;
         }
 
-        // Gravitational Field Grid updates
+        // Field Grids
         if (
           (s.fieldMode === 'lines' && fieldLinesRef.current) ||
           (s.fieldMode === 'vectors' && fieldVectorsRef.current)
@@ -1081,7 +1007,7 @@ export function useThreeSimulation({
           }
         }
 
-        // Rolling history & Phase Space recording
+        // Rolling history
         if (s.running && historyRef.current) {
           const H = historyRef.current;
           const accel = computeAccelerations(s.state.pos, s.masses, s.G);
@@ -1116,7 +1042,6 @@ export function useThreeSimulation({
           H.d02.push(distInfo.pairs.d02);
           H.d12.push(distInfo.pairs.d12);
 
-          // Phase Space records
           H.phase0X.push(s.state.pos[0][0]);
           H.phase0Vx.push(s.state.vel[0][0]);
           H.phase1X.push(s.state.pos[1][0]);
@@ -1156,7 +1081,7 @@ export function useThreeSimulation({
         });
       }
 
-      // Throttled Chart Tick (~3 Hz)
+      // Throttled Chart Tick
       chartAccum += frameDt;
       if (chartAccum > 0.3) {
         chartAccum = 0;
@@ -1175,6 +1100,7 @@ export function useThreeSimulation({
       window.removeEventListener('pointermove', onPointerMove);
       dom.removeEventListener('wheel', onWheel);
       dom.removeEventListener('contextmenu', onContextMenu);
+      celestialRenderer.dispose();
       renderer.dispose();
       if (mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
     };

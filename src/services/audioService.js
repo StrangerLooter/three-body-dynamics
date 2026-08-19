@@ -14,6 +14,7 @@ class AudioEngine {
     this.droneOsc1 = null;
     this.droneOsc2 = null;
     this.lastChirpTime = 0;
+    this.lastAlarmTime = 0;
   }
 
   getStoredMuteState() {
@@ -40,7 +41,7 @@ class AudioEngine {
 
       this.startDeepSpaceDrone();
     } catch (e) {
-      console.warn('Web Audio initialization not allowed yet (requires user gesture).');
+      // AudioContext requires user gesture
     }
   }
 
@@ -103,19 +104,17 @@ class AudioEngine {
 
   /**
    * Synthesizes a Gravitational Wave Chirp on tight periastron passes / high acceleration.
-   * Frequency increases inversely with distance and directly with velocity (LIGO chirp signature).
    */
   triggerGravitationalChirp(speed, minDistance) {
     if (!this.ctx || this.isMuted) return;
     const now = performance.now();
-    if (now - this.lastChirpTime < 180) return; // Debounce rapid triggers
+    if (now - this.lastChirpTime < 180) return;
     this.lastChirpTime = now;
 
     try {
       this.resume();
       const t = this.ctx.currentTime;
 
-      // Base frequency mapped from orbital speed (120Hz to 600Hz)
       const baseFreq = Math.min(650, Math.max(120, 150 + speed * 120));
       const endFreq = baseFreq * (1 + Math.min(2.5, 0.4 / Math.max(0.02, minDistance)));
 
@@ -145,6 +144,72 @@ class AudioEngine {
 
       osc.start(t);
       osc.stop(t + 0.25);
+    } catch (e) {}
+  }
+
+  /**
+   * Plays a cinematic HUD warning notification sound.
+   * Levels: 'CAUTION' (double high beep), 'WARNING' (dual urgent tone), 'CRITICAL' (klaxon siren)
+   */
+  playWarningAlarm(level = 'WARNING') {
+    if (!this.ctx || this.isMuted) return;
+    const now = performance.now();
+    if (now - this.lastAlarmTime < 350) return; // Prevent sound overlapping too quickly
+    this.lastAlarmTime = now;
+
+    try {
+      this.resume();
+      const t = this.ctx.currentTime;
+
+      if (level === 'CRITICAL') {
+        // Urgent 3-pulse red alert klaxon
+        [0, 0.14, 0.28].forEach((offset) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(880, t + offset);
+          osc.frequency.exponentialRampToValueAtTime(440, t + offset + 0.1);
+
+          gain.gain.setValueAtTime(0.12, t + offset);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.11);
+
+          osc.connect(gain);
+          gain.connect(this.masterGain);
+          osc.start(t + offset);
+          osc.stop(t + offset + 0.12);
+        });
+      } else if (level === 'WARNING') {
+        // High-tech 2-pulse warning tone
+        [0, 0.12].forEach((offset, idx) => {
+          const osc = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'square';
+          osc.frequency.setValueAtTime(idx === 0 ? 740 : 880, t + offset);
+
+          gain.gain.setValueAtTime(0.08, t + offset);
+          gain.gain.exponentialRampToValueAtTime(0.001, t + offset + 0.09);
+
+          osc.connect(gain);
+          gain.connect(this.masterGain);
+          osc.start(t + offset);
+          osc.stop(t + offset + 0.1);
+        });
+      } else {
+        // Subtle Caution chime
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(620, t);
+        osc.frequency.exponentialRampToValueAtTime(780, t + 0.08);
+
+        gain.gain.setValueAtTime(0.09, t);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + 0.14);
+
+        osc.connect(gain);
+        gain.connect(this.masterGain);
+        osc.start(t);
+        osc.stop(t + 0.15);
+      }
     } catch (e) {}
   }
 

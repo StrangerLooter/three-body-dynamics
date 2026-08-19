@@ -41,13 +41,14 @@ import { ApiKeyModal } from './components/chat/ApiKeyModal.jsx';
 import { WelcomeScreen } from './components/overlay/WelcomeScreen.jsx';
 import { ShortcutsModal } from './components/overlay/ShortcutsModal.jsx';
 import { WebglErrorModal } from './components/overlay/WebglErrorModal.jsx';
+import { WarningNotificationManager } from './components/hud/WarningNotificationManager.jsx';
 
 function makeInitialSimState(presetKey = 'figureEight') {
   const preset = PRESETS[presetKey]();
   return {
     presetKey,
     masses: [...preset.masses],
-    radii: [...(preset.radii || [0.16, 0.13, 0.1])],
+    radii: [...(preset.radii || [0.16, 0.16, 0.12])],
     state: JSON.parse(JSON.stringify(preset.state)),
     initialState: JSON.parse(JSON.stringify(preset.state)),
     G: 1,
@@ -166,6 +167,39 @@ export default function App() {
   });
   const [chartTick, setChartTick] = useState(0);
 
+  // Cinematic Red Sci-Fi HUD Warnings State
+  const [warnings, setWarnings] = useState([]);
+  const warningSlotCounter = useRef(0);
+
+  const handleWarningAlert = useCallback((alertData) => {
+    const now = new Date();
+    const timestamp = now.toTimeString().split(' ')[0];
+    const id = Date.now() + Math.random();
+    const slotIndex = warningSlotCounter.current++;
+
+    const newWarning = {
+      id,
+      level: alertData.level || 'WARNING',
+      title: alertData.title || 'CLOSE ENCOUNTER DETECTED',
+      bodies: alertData.bodies || 'Body 1 and Body 2',
+      description: alertData.description || 'Timestep automatically reduced to maintain stability.',
+      timestamp,
+      duration: alertData.level === 'CRITICAL' ? 6 : 8,
+      slotIndex,
+    };
+
+    setWarnings((prev) => {
+      // Retain max 3 concurrent warnings
+      const next = [...prev, newWarning];
+      if (next.length > 3) next.shift();
+      return next;
+    });
+  }, []);
+
+  const handleDismissWarning = useCallback((id) => {
+    setWarnings((prev) => prev.filter((w) => w.id !== id));
+  }, []);
+
   // AI & Voice Narration State
   const [chatOpen, setChatOpen] = useState(false);
   const [chatMessages, setChatMessages] = useState([]);
@@ -194,6 +228,7 @@ export default function App() {
     onCamModeChange: (mode) => setUi((p) => ({ ...p, camMode: mode })),
     onTelemetryUpdate: (telemetry) => setUi((p) => ({ ...p, ...telemetry })),
     onChartTick: () => setChartTick((c) => c + 1),
+    onWarningAlert: handleWarningAlert,
     onWebglError: () => setUi((p) => ({ ...p, webglError: true })),
   });
 
@@ -249,6 +284,7 @@ export default function App() {
       trailLinesRef.current.forEach((l) => l?.geometry?.setDrawRange(0, 0));
     }
     clearHistoryArrays();
+    setWarnings([]);
     if (s.chaosOn && sysBRef.current) {
       sysBRef.current.state = JSON.parse(JSON.stringify(sysBRef.current.initialState));
       s.chaosMaxSep = s.chaosInitialSep;
@@ -314,6 +350,7 @@ export default function App() {
       trailLinesRef.current.forEach((l) => l?.geometry?.setDrawRange(0, 0));
     }
     clearHistoryArrays();
+    setWarnings([]);
     camStateRef.current.mode = 'free';
     setUi((p) => ({
       ...p,
@@ -691,6 +728,9 @@ export default function App() {
           {BODY_NAMES[i]}
         </div>
       ))}
+
+      {/* Floating Cinematic Red Sci-Fi HUD Warning Cards */}
+      <WarningNotificationManager warnings={warnings} onDismiss={handleDismissWarning} />
 
       {/* Top Status Bar */}
       <TopStatusBar
