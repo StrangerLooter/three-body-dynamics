@@ -134,6 +134,12 @@ export function LeftControlPanel({
         <Section title="ORBIT PRESETS" collapsible defaultOpen={true}>
           <div className="grid grid-cols-1 gap-1">
             <PresetBtn
+              active={presetKey === 'solarSystem'}
+              onClick={() => onLoadPreset('solarSystem')}
+            >
+              ☀️ SOLAR SYSTEM (SUN CENTER)
+            </PresetBtn>
+            <PresetBtn
               active={presetKey === 'figureEight'}
               onClick={() => onLoadPreset('figureEight')}
             >

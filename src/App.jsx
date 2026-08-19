@@ -43,7 +43,7 @@ import { ShortcutsModal } from './components/overlay/ShortcutsModal.jsx';
 import { WebglErrorModal } from './components/overlay/WebglErrorModal.jsx';
 import { WarningNotificationManager } from './components/hud/WarningNotificationManager.jsx';
 
-function makeInitialSimState(presetKey = 'figureEight') {
+function makeInitialSimState(presetKey = 'solarSystem') {
   const preset = PRESETS[presetKey]();
   return {
     presetKey,
@@ -117,8 +117,8 @@ export default function App() {
     maxDist: 0,
     pairDist: { d01: 0, d02: 0, d12: 0 },
     selected: 0,
-    masses: [1, 1, 1],
-    presetKey: 'figureEight',
+    masses: [5.0, 0.03, 0.015],
+    presetKey: 'solarSystem',
     warning: null,
     panelLeft: true,
     panelRight: true,
@@ -352,6 +352,7 @@ export default function App() {
 
     // Optimal camera distance auto-framing per preset
     const presetDistances = {
+      solarSystem: 7.0,
       figureEight: 6.5,
       hierarchical: 7.2,
       chaos: 6.8,
