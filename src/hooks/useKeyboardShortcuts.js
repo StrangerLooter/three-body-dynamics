@@ -6,6 +6,8 @@ export function useKeyboardShortcuts({
   onReset,
   onToggleTrails,
   onToggleVectors,
+  onToggleLagrange,
+  onToggleAudio,
   onCycleCamera,
   onFocusSelected,
   onToggleAnalysis,
@@ -16,7 +18,6 @@ export function useKeyboardShortcuts({
     if (!enabled) return;
 
     const onKey = (e) => {
-      // Ignore if user is currently typing in an input, textarea or select
       if (
         ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName) ||
         document.activeElement?.isContentEditable
@@ -33,6 +34,10 @@ export function useKeyboardShortcuts({
         onToggleTrails?.();
       } else if (e.key === 'v' || e.key === 'V') {
         onToggleVectors?.();
+      } else if (e.key === 'l' || e.key === 'L') {
+        onToggleLagrange?.();
+      } else if (e.key === 'm' || e.key === 'M') {
+        onToggleAudio?.();
       } else if (e.key === 'c' || e.key === 'C') {
         onCycleCamera?.();
       } else if (e.key === 'f' || e.key === 'F') {
@@ -54,6 +59,8 @@ export function useKeyboardShortcuts({
     onReset,
     onToggleTrails,
     onToggleVectors,
+    onToggleLagrange,
+    onToggleAudio,
     onCycleCamera,
     onFocusSelected,
     onToggleAnalysis,

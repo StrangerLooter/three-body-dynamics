@@ -4,6 +4,7 @@ import { MultiLineChart } from './MultiLineChart.jsx';
 
 export const ANALYSIS_TABS = [
   { key: 'energy', label: 'ENERGY' },
+  { key: 'phasespace', label: 'PHASE SPACE (x vs vx)' },
   { key: 'momentum', label: 'MOMENTUM' },
   { key: 'angular', label: 'ANGULAR MOMENTUM' },
   { key: 'distances', label: 'DISTANCES' },
@@ -24,6 +25,7 @@ export function AnalysisDrawer({
   let series = [];
   let note = '';
   let tArr = H.t || [];
+  let isPhaseSpace = false;
 
   if (tab === 'energy') {
     series = [
@@ -32,6 +34,14 @@ export function AnalysisDrawer({
       { name: 'TOTAL', color: '#ffffff', values: H.Etot || [] },
     ];
     note = 'K = ½Σmᵢ|vᵢ|²   U = −GΣ mᵢmⱼ/rᵢⱼ   E = K + U';
+  } else if (tab === 'phasespace') {
+    isPhaseSpace = true;
+    series = [
+      { name: `${BODY_NAMES[0]} (x vs vx)`, color: BODY_HEX[0], xValues: H.phase0X || [], yValues: H.phase0Vx || [] },
+      { name: `${BODY_NAMES[1]} (x vs vx)`, color: BODY_HEX[1], xValues: H.phase1X || [], yValues: H.phase1Vx || [] },
+      { name: `${BODY_NAMES[2]} (x vs vx)`, color: BODY_HEX[2], xValues: H.phase2X || [], yValues: H.phase2Vx || [] },
+    ];
+    note = 'Phase Space (x, vₓ) trajectory: closed loops = periodic orbits; strange attractors = chaos';
   } else if (tab === 'momentum') {
     series = [{ name: '|P|', color: BODY_HEX[0], values: H.momMag || [] }];
     note = 'P = Σ mᵢvᵢ — conserved for an isolated system';
@@ -54,7 +64,9 @@ export function AnalysisDrawer({
     tArr = H.chaosT || [];
   }
 
-  const n = series.length && series[0].values ? series[0].values.length : 0;
+  const n = isPhaseSpace
+    ? series[0]?.xValues?.length || 0
+    : series.length && series[0].values ? series[0].values.length : 0;
   const last = (arr) => (arr && arr.length ? arr[arr.length - 1] : 0);
 
   return (
@@ -116,7 +128,7 @@ export function AnalysisDrawer({
               : 'Run the simulation to record telemetry data.'}
           </div>
         ) : (
-          <MultiLineChart series={series} tArr={tArr} />
+          <MultiLineChart series={series} tArr={tArr} isPhaseSpace={isPhaseSpace} />
         )}
       </div>
 
@@ -128,7 +140,11 @@ export function AnalysisDrawer({
               <span className="w-2 h-2 inline-block rounded-xs" style={{ background: s.color }} />
               <span className="text-slate-400">{s.name}:</span>
               <span className="text-slate-200 tabular-nums">
-                {Number.isFinite(last(s.values)) ? last(s.values).toExponential(3) : '—'}
+                {isPhaseSpace
+                  ? `${last(s.xValues || []).toFixed(2)}, ${last(s.yValues || []).toFixed(2)}`
+                  : Number.isFinite(last(s.values))
+                  ? last(s.values).toExponential(3)
+                  : '—'}
               </span>
             </span>
           ))}

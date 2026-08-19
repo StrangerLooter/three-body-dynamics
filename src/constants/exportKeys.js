@@ -10,7 +10,21 @@ export const EXPORT_KEYS = [
 ];
 
 export function makeEmptyHistory() {
-  const H = { t: [], chaosT: [], sep: [], err: [], momMag: [], angMag: [] };
+  const H = {
+    t: [],
+    chaosT: [],
+    sep: [],
+    err: [],
+    momMag: [],
+    angMag: [],
+    // Phase-space records for Poincaré and phase portrait plotting
+    phase0X: [],
+    phase0Vx: [],
+    phase1X: [],
+    phase1Vx: [],
+    phase2X: [],
+    phase2Vx: [],
+  };
   EXPORT_KEYS.forEach((k) => {
     if (k !== 't') H[k] = [];
   });

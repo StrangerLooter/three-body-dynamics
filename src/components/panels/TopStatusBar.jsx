@@ -9,9 +9,12 @@ export function TopStatusBar({
   integrator,
   camMode,
   demoMode,
+  showLagrange,
+  audioMuted,
   isFullscreen,
   chatOpen,
   onToggleDemoMode,
+  onToggleAudio,
   onTakeScreenshot,
   onToggleFullscreen,
   onToggleHelp,
@@ -36,6 +39,11 @@ export function TopStatusBar({
             {running ? 'RUNNING' : 'PAUSED'}
           </span>
         </span>
+        {showLagrange && (
+          <span className="hidden sm:inline-block px-1.5 py-0.2 border border-sky-400/40 bg-sky-950/40 text-sky-300 text-[9px] font-semibold tracking-wider rounded-xs">
+            L₁-L₅ ACTIVE
+          </span>
+        )}
       </div>
 
       {/* Telemetry info & Action Buttons */}
@@ -69,6 +77,16 @@ export function TopStatusBar({
         )}
 
         <div className="flex items-center gap-3 pl-3 border-l border-white/15">
+          <button
+            onClick={onToggleAudio}
+            title={audioMuted ? 'Unmute Gravitational Audio (M)' : 'Mute Gravitational Audio (M)'}
+            aria-label="Toggle Audio"
+            className={`text-sm transition-colors ${
+              audioMuted ? 'text-slate-500 hover:text-slate-300' : 'text-cyan-300 hover:text-cyan-200'
+            }`}
+          >
+            {audioMuted ? '🔇' : '🔊'}
+          </button>
           <button
             onClick={onTakeScreenshot}
             title="Take high-res screenshot (PNG)"

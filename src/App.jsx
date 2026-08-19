@@ -21,6 +21,7 @@ import {
   parseNaturalLanguageCommand,
 } from './services/aiService.js';
 import { speakText, stopSpeech } from './services/speechService.js';
+import { audio } from './services/audioService.js';
 import {
   buildExportCSV,
   buildExportJSON,
@@ -63,6 +64,8 @@ function makeInitialSimState(presetKey = 'figureEight') {
     showAxes: false,
     showLabels: false,
     showSpacetime: false,
+    showAtmosphere: true,
+    showLagrange: false,
     adaptiveOn: false,
     dtMin: 0.0005,
     dtMax: 0.02,
@@ -126,6 +129,9 @@ export default function App() {
     showAxes: false,
     showLabels: false,
     showSpacetime: false,
+    showAtmosphere: true,
+    showLagrange: false,
+    audioMuted: audio.isMuted,
     adaptiveOn: false,
     dtMin: 0.0005,
     dtMax: 0.02,
@@ -221,12 +227,16 @@ export default function App() {
   };
 
   const togglePlay = useCallback(() => {
+    audio.init();
+    audio.resume();
+    audio.playUiBeep(480, 0.05);
     const s = simRef.current;
     s.running = !s.running;
     setUi((p) => ({ ...p, running: s.running }));
   }, []);
 
   const resetSim = useCallback(() => {
+    audio.playUiBeep(380, 0.08);
     const s = simRef.current;
     s.state = JSON.parse(JSON.stringify(s.initialState));
     s.simTime = 0;
@@ -255,6 +265,7 @@ export default function App() {
   }, [trailBuffersRef, trailLinesRef]);
 
   const stepOnce = useCallback(() => {
+    audio.playUiBeep(560, 0.03);
     const s = simRef.current;
     s.state = integrateStep(s.state, s.masses, s.G, s.dt, s.integrator);
     s.simTime += s.dt;
@@ -263,9 +274,9 @@ export default function App() {
         const buf = trailBuffersRef.current[i];
         if (buf) {
           const idx = (buf.count % 600) * 3;
-          buf.arr[idx] = s.state.pos[i][0];
-          buf.arr[idx + 1] = s.state.pos[i][1];
-          buf.arr[idx + 2] = s.state.pos[i][2];
+          buf.pos[idx] = s.state.pos[i][0];
+          buf.pos[idx + 1] = s.state.pos[i][1];
+          buf.pos[idx + 2] = s.state.pos[i][2];
           buf.count++;
         }
       }
@@ -292,6 +303,7 @@ export default function App() {
   };
 
   const loadPreset = (key) => {
+    audio.playUiBeep(620, 0.07);
     const fresh = makeInitialSimState(key);
     simRef.current = fresh;
     sysBRef.current = null;
@@ -348,6 +360,11 @@ export default function App() {
     setUi((p) => ({ ...p, [key]: simRef.current[key] }));
   };
 
+  const toggleAudio = () => {
+    const isMuted = audio.toggleMute();
+    setUi((p) => ({ ...p, audioMuted: isMuted }));
+  };
+
   const setAdaptiveField = (key, value) => {
     simRef.current[key] = value;
     setUi((p) => ({ ...p, [key]: value }));
@@ -359,6 +376,7 @@ export default function App() {
   };
 
   const enableChaosLab = () => {
+    audio.playUiBeep(700, 0.08);
     const s = simRef.current;
     const cloneState = JSON.parse(JSON.stringify(s.state));
     const targets = s.perturbTarget === 'all' ? [0, 1, 2] : [Number(s.perturbTarget)];
@@ -492,7 +510,6 @@ export default function App() {
     setChatError(null);
 
     try {
-      // Natural Language Simulation Control
       const nlpReply = parseNaturalLanguageCommand(text, {
         play: () => {
           simRef.current.running = true;
@@ -618,6 +635,8 @@ export default function App() {
     onReset: resetSim,
     onToggleTrails: () => toggleFlag('trailsOn'),
     onToggleVectors: () => toggleFlag('showVectors'),
+    onToggleLagrange: () => toggleFlag('showLagrange'),
+    onToggleAudio: toggleAudio,
     onCycleCamera: cycleCameraMode,
     onFocusSelected: () => {
       camStateRef.current.mode = 'body' + simRef.current.selected;
@@ -634,7 +653,15 @@ export default function App() {
   }
 
   if (!entered) {
-    return <WelcomeScreen onEnter={() => setEntered(true)} />;
+    return (
+      <WelcomeScreen
+        onEnter={() => {
+          audio.init();
+          audio.resume();
+          setEntered(true);
+        }}
+      />
+    );
   }
 
   return (
@@ -674,9 +701,12 @@ export default function App() {
         integrator={ui.integrator}
         camMode={ui.camMode}
         demoMode={ui.demoMode}
+        showLagrange={ui.showLagrange}
+        audioMuted={ui.audioMuted}
         isFullscreen={ui.isFullscreen}
         chatOpen={chatOpen}
         onToggleDemoMode={ui.demoMode ? exitDemoMode : enableDemoMode}
+        onToggleAudio={toggleAudio}
         onTakeScreenshot={handleTakeScreenshot}
         onToggleFullscreen={toggleFullscreen}
         onToggleHelp={() => setUi((p) => ({ ...p, helpOpen: !p.helpOpen }))}
@@ -710,6 +740,9 @@ export default function App() {
         showAxes={ui.showAxes}
         showLabels={ui.showLabels}
         showSpacetime={ui.showSpacetime}
+        showAtmosphere={ui.showAtmosphere}
+        showLagrange={ui.showLagrange}
+        audioMuted={ui.audioMuted}
         fieldMode={ui.fieldMode}
         presetKey={ui.presetKey}
         chaosOn={ui.chaosOn}
@@ -731,6 +764,7 @@ export default function App() {
         onSetCamMode={setCamMode}
         onResetCamera={resetCamera}
         onToggleVisualFlag={toggleFlag}
+        onToggleAudio={toggleAudio}
         onSetFieldMode={setFieldMode}
         onLoadPreset={loadPreset}
         onSetChaosParam={setChaosField}

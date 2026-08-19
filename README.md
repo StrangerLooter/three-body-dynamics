@@ -1,6 +1,6 @@
 # Three-Body Dynamics
 
-**A professional 3D numerical simulation & chaos laboratory for the classical Three-Body Problem**
+**An observatory-grade 3D numerical simulation & chaos laboratory for the classical Three-Body Problem**
 
 Built by **Ram Vishwakarma, Abhishek, and Mukul** — B.Sc. Physics (Hons.), IEHE Bhopal | College Model Competition Project
 
@@ -10,7 +10,7 @@ Built by **Ram Vishwakarma, Abhishek, and Mukul** — B.Sc. Physics (Hons.), IEH
 
 ## 🌌 Overview
 
-Three-Body Dynamics is a real-time, interactive, GPU-accelerated numerical simulator that brings the beauty and chaotic unpredictability of celestial mechanics to life. Built using raw Three.js and React 18, it couples high-accuracy numerical integrators with rich physical telemetry, spacetime fabric curvature, gravitational field visualization, and an AI physics tutor.
+Three-Body Dynamics is a real-time, interactive, GPU-accelerated numerical simulator and physics laboratory. Built using Three.js and React 18, it couples high-accuracy numerical integrators (RK4, Velocity Verlet, Euler) with atmospheric Rayleigh scattering shaders, dynamic spacetime fabric curvature, Lagrange equilibrium solvers ($L_1–L_5$), procedural gravitational wave audio sonification, and an AI physics tutor.
 
 ---
 
@@ -18,15 +18,16 @@ Three-Body Dynamics is a real-time, interactive, GPU-accelerated numerical simul
 
 | Domain | Features |
 |---|---|
-| **Physics Engine** | 4th-Order Runge-Kutta (RK4), Velocity Verlet, and Euler integrators with adaptive timestepping & singularity softening |
-| **Orbit Presets** | Chenciner-Montgomery Figure-8 Choreography, Hierarchical Triple, Equal-Mass Chaos, Restricted Three-Body |
+| **Photorealistic Visuals** | Atmospheric Rayleigh Fresnel glow shaders, velocity-gradient dynamic orbital trails, multi-temperature starfield, cosmic dust nebulae |
+| **Physics Engine** | 4th-Order Runge-Kutta (RK4), Velocity Verlet, Euler integrators with adaptive step doubling & singularity softening |
+| **Lagrange Equilibrium** | Real-time calculation and 3D visualization of the 5 Lagrange points ($L_1, L_2, L_3, L_4, L_5$) |
+| **Gravitational Audio** | Procedural Web Audio API sonification of orbital acceleration, gravitational wave chirps on close approach, and deep-space drone |
+| **Spacetime Mesh** | 3D tension-colored fabric mesh dynamically warped according to the exact gravitational potential well $U(r)$ |
 | **Chaos Lab** | Real-time twin system perturbation ($A/B$), divergence tracking, and numerical Lyapunov exponent ($\lambda$) estimation |
-| **Field Visualization** | Directional field lines, magnitude-encoded vector fields, potential well heatmap contours, tracer particle flow |
-| **Spacetime Mesh** | 3D fabric mesh dynamically warped according to the exact gravitational potential well $U(r)$ |
-| **Scientific Telemetry** | Total energy, kinetic/potential energy, linear momentum $\vec{P}$, angular momentum $\vec{L}$, center of mass, pairwise distances |
-| **Analysis Drawer** | Real-time multi-series SVG graphs, rolling telemetry buffers, CSV and JSON scientific data export |
+| **Gravitational Field** | Directional field lines, magnitude-encoded vector fields, potential well heatmap contours, tracer particle flow |
+| **Phase Space Analysis** | 2D $(x, v_x)$ state-space attractor trajectories, energy/momentum conservation charts, and CSV/JSON export |
 | **AI Physics Tutor** | Groq-powered assistant with live telemetry awareness, TTS voice narration, physics quizzes, and judge mode |
-| **Camera & Visuals** | 9 camera modes (Free Orbit, Follow Body 1–3, Follow COM, Orthographic Top/Front/Side, Auto Orbit), trails, velocity vectors |
+| **Camera & Control** | 9 camera modes (Free Orbit, Follow Body 1–3, Follow COM, Orthographic Top/Front/Side, Auto Orbit), full hotkey suite |
 
 ---
 
@@ -52,6 +53,7 @@ three-body-dynamics/
     │   ├── conservation.js   # Energy, momentum, COM, and distance metrics
     │   ├── chaos.js          # Phase-space divergence and Lyapunov calculation
     │   ├── presets.js        # Figure-8, Hierarchical, Chaos, Restricted configurations
+    │   ├── lagrange.js       # Real-time L1-L5 Lagrange equilibrium point solver
     │   └── index.js          # Barrel export
     ├── constants/            # Constants and configuration
     │   ├── bodies.js         # Textures, colors, radius, spin rates, trail buffers
@@ -62,6 +64,7 @@ three-body-dynamics/
     ├── services/             # External integration and export services
     │   ├── aiService.js      # Groq API client with state snapshotting & NLP control
     │   ├── speechService.js  # Web Speech API text-to-speech synthesis
+    │   ├── audioService.js   # Procedural Web Audio gravitational wave sonification
     │   └── exportService.js  # CSV/JSON file generation and canvas screenshots
     ├── hooks/                # Custom React hooks
     │   ├── useThreeSimulation.js # Three.js scene, renderer, particle loop, controls
@@ -120,6 +123,8 @@ npm run build
 | `C` | Cycle through camera modes |
 | `T` | Toggle particle orbital trails |
 | `V` | Toggle velocity vector arrows |
+| `L` | Toggle Lagrange equilibrium points ($L_1–L_5$) |
+| `M` | Toggle audio sonification & cosmic drone |
 | `A` | Toggle analysis telemetry drawer |
 | `?` | Toggle keyboard shortcuts overlay |
 | `ESC` | Close active modals / drawers |

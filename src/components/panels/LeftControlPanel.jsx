@@ -24,6 +24,9 @@ export function LeftControlPanel({
   showAxes,
   showLabels,
   showSpacetime,
+  showAtmosphere,
+  showLagrange,
+  audioMuted,
   fieldMode,
   presetKey,
   chaosOn,
@@ -45,6 +48,7 @@ export function LeftControlPanel({
   onSetCamMode,
   onResetCamera,
   onToggleVisualFlag,
+  onToggleAudio,
   onSetFieldMode,
   onLoadPreset,
   onSetChaosParam,
@@ -58,7 +62,7 @@ export function LeftControlPanel({
         open ? 'translate-x-0' : '-translate-x-full'
       }`}
     >
-      <div className="w-64 h-full overflow-y-auto bg-[#02050c]/90 backdrop-blur-md border-r border-white/10 p-3 space-y-4 text-xs text-slate-300 custom-scrollbar">
+      <div className="w-68 h-full overflow-y-auto bg-[#02050c]/92 backdrop-blur-md border-r border-white/10 p-3 space-y-4 text-xs text-slate-300 custom-scrollbar">
         {/* SIMULATION */}
         <Section title="SIMULATION">
           <div className="flex gap-1.5">
@@ -85,10 +89,11 @@ export function LeftControlPanel({
               ))}
             </select>
           </Row>
+          <ToggleRow label="AUDIO SONIFICATION (M)" value={!audioMuted} onChange={onToggleAudio} />
         </Section>
 
         {/* PHYSICS */}
-        <Section title="PHYSICS">
+        <Section title="PHYSICS & GRAVITY">
           <Row label="INTEGRATOR">
             <select
               className="bg-black/80 border border-white/15 text-cyan-200 px-1.5 py-0.5 text-[11px] font-mono w-24 focus:border-cyan-400 focus:outline-none"
@@ -126,13 +131,18 @@ export function LeftControlPanel({
               </Row>
             </div>
           )}
+          <ToggleRow
+            label="LAGRANGE POINTS (L)"
+            value={showLagrange}
+            onChange={() => onToggleVisualFlag('showLagrange')}
+          />
         </Section>
 
         {/* CAMERA */}
         <Section title="CAMERA">
           <Row label="MODE">
             <select
-              className="bg-black/80 border border-white/15 text-cyan-200 px-1.5 py-0.5 text-[11px] font-mono w-32 focus:border-cyan-400 focus:outline-none"
+              className="bg-black/80 border border-white/15 text-cyan-200 px-1.5 py-0.5 text-[11px] font-mono w-36 focus:border-cyan-400 focus:outline-none"
               value={camMode}
               onChange={(e) => onSetCamMode(e.target.value)}
             >
@@ -149,7 +159,8 @@ export function LeftControlPanel({
         </Section>
 
         {/* VISUALS */}
-        <Section title="VISUALS">
+        <Section title="VISUALS & SHADERS">
+          <ToggleRow label="ATMOSPHERIC GLOW" value={showAtmosphere} onChange={() => onToggleVisualFlag('showAtmosphere')} />
           <ToggleRow label="TRAILS (T)" value={trailsOn} onChange={() => onToggleVisualFlag('trailsOn')} />
           <ToggleRow
             label="VELOCITY VECTORS (V)"
@@ -175,7 +186,7 @@ export function LeftControlPanel({
           />
           {showSpacetime && (
             <div className="text-[9px] text-slate-400 leading-tight pt-0.5">
-              White mesh warps dynamically according to the exact gravitational potential well.
+              3D mesh dynamically warps with tension-colored strain gradients in the gravitational potential well.
             </div>
           )}
         </Section>

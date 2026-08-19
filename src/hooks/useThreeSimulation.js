@@ -12,6 +12,7 @@ import {
   computeFieldAt,
   computePotentialAt,
   computeAccelerations,
+  computeLagrangePoints,
   minPairDistance,
   vLen,
   vDot,
@@ -19,30 +20,78 @@ import {
 } from '../physics/index.js';
 import {
   BODY_COLORS,
+  BODY_HEX,
   BODY_TEXTURES,
   BODY_ROT_SPEED,
   TRAIL_LENGTH,
 } from '../constants/bodies.js';
+import { audio } from '../services/audioService.js';
 
-function buildStarfield() {
-  const layers = new THREE.Group();
-  const specs = [
-    { count: 2200, radius: 60, size: 0.09, color: 0x6f7f9f, opacity: 0.55 },
-    { count: 1200, radius: 40, size: 0.13, color: 0x9fb3d9, opacity: 0.8 },
-    { count: 400, radius: 25, size: 0.19, color: 0xe8eefc, opacity: 1.0 },
+// Custom Atmospheric Fresnel Glow Shader
+const AtmosphereShader = {
+  vertexShader: `
+    varying vec3 vNormal;
+    varying vec3 vPositionNormal;
+    void main() {
+      vNormal = normalize(normalMatrix * normal);
+      vPositionNormal = normalize((modelViewMatrix * vec4(position, 1.0)).xyz);
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform vec3 color;
+    uniform float intensity;
+    uniform float power;
+    varying vec3 vNormal;
+    varying vec3 vPositionNormal;
+    void main() {
+      float fresnel = pow(1.0 - abs(dot(vNormal, -vPositionNormal)), power);
+      gl_FragColor = vec4(color, fresnel * intensity);
+    }
+  `,
+};
+
+function createAtmosphereMesh(radius, colorHex) {
+  const geo = new THREE.SphereGeometry(radius * 1.28, 32, 32);
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: AtmosphereShader.vertexShader,
+    fragmentShader: AtmosphereShader.fragmentShader,
+    uniforms: {
+      color: { value: new THREE.Color(colorHex) },
+      intensity: { value: 0.85 },
+      power: { value: 2.6 },
+    },
+    blending: THREE.AdditiveBlending,
+    side: THREE.BackSide,
+    transparent: true,
+    depthWrite: false,
+  });
+  return new THREE.Mesh(geo, mat);
+}
+
+function buildDeepSpaceSkybox() {
+  const root = new THREE.Group();
+
+  // 1. Multi-spectrum stellar layers (O/B Blue giants, G White/Yellow, M Red Dwarfs)
+  const starSpectra = [
+    { count: 1800, radius: 80, size: 0.12, color: 0x8bbaff, opacity: 0.75 }, // Blue Giants
+    { count: 1600, radius: 65, size: 0.14, color: 0xffffff, opacity: 0.9 },  // White Main-Sequence
+    { count: 900,  radius: 50, size: 0.16, color: 0xffdf80, opacity: 0.85 }, // Yellow Stars
+    { count: 600,  radius: 40, size: 0.18, color: 0xff8c73, opacity: 0.95 }, // Red Dwarfs
   ];
-  specs.forEach((s) => {
-    const positions = new Float32Array(s.count * 3);
+
+  starSpectra.forEach((s) => {
+    const pos = new Float32Array(s.count * 3);
     for (let i = 0; i < s.count; i++) {
-      const r = s.radius * (0.4 + 0.6 * Math.random());
+      const r = s.radius * (0.35 + 0.65 * Math.random());
       const theta = Math.random() * Math.PI * 2;
       const phi = Math.acos(2 * Math.random() - 1);
-      positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-      positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-      positions[i * 3 + 2] = r * Math.cos(phi);
+      pos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+      pos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
+      pos[i * 3 + 2] = r * Math.cos(phi);
     }
     const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
     const mat = new THREE.PointsMaterial({
       color: s.color,
       size: s.size,
@@ -51,9 +100,44 @@ function buildStarfield() {
       sizeAttenuation: true,
       depthWrite: false,
     });
-    layers.add(new THREE.Points(geo, mat));
+    root.add(new THREE.Points(geo, mat));
   });
-  return layers;
+
+  // 2. Cosmic Nebula Clouds (Procedural cosmic dust particles)
+  const NEBULA_COUNT = 350;
+  const nebPos = new Float32Array(NEBULA_COUNT * 3);
+  const nebColors = new Float32Array(NEBULA_COUNT * 3);
+  const colorA = new THREE.Color(0x38bdf8); // Cyan dust
+  const colorB = new THREE.Color(0xa855f7); // Violet dust
+  const colorC = new THREE.Color(0xf59e0b); // Amber dust
+
+  for (let i = 0; i < NEBULA_COUNT; i++) {
+    const r = 35 + 30 * Math.random();
+    const theta = Math.random() * Math.PI * 2;
+    const phi = (Math.random() - 0.5) * 1.8;
+    nebPos[i * 3] = r * Math.cos(phi) * Math.cos(theta);
+    nebPos[i * 3 + 1] = r * Math.sin(phi);
+    nebPos[i * 3 + 2] = r * Math.cos(phi) * Math.sin(theta);
+
+    const c = Math.random() < 0.45 ? colorA : Math.random() < 0.8 ? colorB : colorC;
+    nebColors[i * 3] = c.r;
+    nebColors[i * 3 + 1] = c.g;
+    nebColors[i * 3 + 2] = c.b;
+  }
+  const nebGeo = new THREE.BufferGeometry();
+  nebGeo.setAttribute('position', new THREE.BufferAttribute(nebPos, 3));
+  nebGeo.setAttribute('color', new THREE.BufferAttribute(nebColors, 3));
+  const nebMat = new THREE.PointsMaterial({
+    size: 1.8,
+    vertexColors: true,
+    transparent: true,
+    opacity: 0.16,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  root.add(new THREE.Points(nebGeo, nebMat));
+
+  return root;
 }
 
 export function useThreeSimulation({
@@ -73,16 +157,21 @@ export function useThreeSimulation({
   const rendererRef = useRef(null);
   const sceneRef = useRef(null);
   const cameraRef = useRef(null);
+
   const bodyMeshesRef = useRef([]);
+  const atmosphereMeshesRef = useRef([]);
   const bodyMeshesBRef = useRef([]);
   const trailLinesRef = useRef([]);
   const trailBuffersRef = useRef([]);
+  const arrowsRef = useRef([]);
+
   const comMarkerRef = useRef(null);
   const gridRef = useRef(null);
   const spacetimeGridRef = useRef(null);
   const axesHelperRef = useRef(null);
-  const arrowsRef = useRef([]);
-  const raycasterRef = useRef(new THREE.Raycaster());
+  const lagrangeGroupRef = useRef(null);
+  const shockwaveGroupRef = useRef(null);
+  const shockwavesRef = useRef([]);
 
   const fieldLinesRef = useRef(null);
   const fieldVectorsRef = useRef(null);
@@ -90,6 +179,7 @@ export function useThreeSimulation({
   const fieldParticlesRef = useRef(null);
   const fieldParticleDataRef = useRef([]);
 
+  const raycasterRef = useRef(new THREE.Raycaster());
   const dragRef = useRef({ dragging: false, panning: false, lastX: 0, lastY: 0, moved: 0 });
   const clickRef = useRef({ time: 0, index: -1 });
 
@@ -98,14 +188,14 @@ export function useThreeSimulation({
 
     const mount = mountRef.current;
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x02040a, 0.028);
+    scene.fog = new THREE.FogExp2(0x02040a, 0.024);
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(
       50,
       mount.clientWidth / mount.clientHeight,
       0.05,
-      200
+      250
     );
     cameraRef.current = camera;
 
@@ -115,6 +205,7 @@ export function useThreeSimulation({
         antialias: true,
         alpha: false,
         preserveDrawingBuffer: true,
+        powerPreference: 'high-performance',
       });
     } catch (e) {
       onWebglError?.();
@@ -127,28 +218,34 @@ export function useThreeSimulation({
     mount.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // Lighting
-    scene.add(new THREE.AmbientLight(0x30405f, 1.1));
-    const key = new THREE.PointLight(0xffffff, 1.4, 0, 2);
-    key.position.set(4, 5, 6);
+    // Cinematic Lighting
+    scene.add(new THREE.AmbientLight(0x354a6b, 1.2));
+    const key = new THREE.PointLight(0xffffff, 1.6, 0, 1.8);
+    key.position.set(5, 6, 7);
     scene.add(key);
 
-    // Starfield
-    scene.add(buildStarfield());
+    const rim = new THREE.DirectionalLight(0x6fd3ff, 0.5);
+    rim.position.set(-5, -4, -6);
+    scene.add(rim);
 
-    // Coordinate grid
-    const grid = new THREE.GridHelper(10, 20, 0x1c2b45, 0x121c30);
+    // Deep Space Cosmic Skybox
+    scene.add(buildDeepSpaceSkybox());
+
+    // Coordinate Grid
+    const grid = new THREE.GridHelper(12, 24, 0x1c2b45, 0x101726);
     grid.position.y = -2.2;
     grid.material.transparent = true;
     grid.material.opacity = 0.25;
     scene.add(grid);
     gridRef.current = grid;
 
-    // Spacetime fabric mesh (26x26)
-    const ST_N = 26;
-    const ST_EXTENT = 4.2;
+    // Spacetime Fabric Mesh with Vertex Color Tension Mapping
+    const ST_N = 28;
+    const ST_EXTENT = 4.4;
     const ST_BASE_Y = -1.9;
     const stPos = new Float32Array(ST_N * ST_N * 3);
+    const stColors = new Float32Array(ST_N * ST_N * 3);
+
     for (let ix = 0; ix < ST_N; ix++) {
       for (let iz = 0; iz < ST_N; iz++) {
         const x = (ix / (ST_N - 1) - 0.5) * 2 * ST_EXTENT;
@@ -157,6 +254,10 @@ export function useThreeSimulation({
         stPos[idx] = x;
         stPos[idx + 1] = ST_BASE_Y;
         stPos[idx + 2] = z;
+        // Default flat space color (deep subtle blue-cyan)
+        stColors[idx] = 0.35;
+        stColors[idx + 1] = 0.65;
+        stColors[idx + 2] = 0.85;
       }
     }
     const stIndices = [];
@@ -169,11 +270,12 @@ export function useThreeSimulation({
     }
     const stGeo = new THREE.BufferGeometry();
     stGeo.setAttribute('position', new THREE.BufferAttribute(stPos, 3));
+    stGeo.setAttribute('color', new THREE.BufferAttribute(stColors, 3));
     stGeo.setIndex(stIndices);
     const stMat = new THREE.LineBasicMaterial({
-      color: 0xffffff,
+      vertexColors: true,
       transparent: true,
-      opacity: 0.28,
+      opacity: 0.45,
     });
     const spacetimeGrid = new THREE.LineSegments(stGeo, stMat);
     spacetimeGrid.visible = false;
@@ -186,71 +288,105 @@ export function useThreeSimulation({
     scene.add(axes);
     axesHelperRef.current = axes;
 
-    // Planet Spheres & Trails
+    // Lagrange Points (L1 - L5) Group
+    const lagrangeGroup = new THREE.Group();
+    lagrangeGroup.visible = false;
+    const lMarkers = [];
+    for (let k = 0; k < 5; k++) {
+      const ringGeo = new THREE.RingGeometry(0.04, 0.065, 16);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.8,
+      });
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = Math.PI / 2;
+      lagrangeGroup.add(ring);
+      lMarkers.push(ring);
+    }
+    scene.add(lagrangeGroup);
+    lagrangeGroupRef.current = lagrangeGroup;
+
+    // Shockwave Rings Group
+    const shockwaveGroup = new THREE.Group();
+    scene.add(shockwaveGroup);
+    shockwaveGroupRef.current = shockwaveGroup;
+
+    // Celestial Bodies & Atmosphere Meshes
     const sim = simRef.current;
     bodyMeshesRef.current = [];
+    atmosphereMeshesRef.current = [];
     trailLinesRef.current = [];
     trailBuffersRef.current = [];
     arrowsRef.current = [];
     const textureLoader = new THREE.TextureLoader();
 
     for (let i = 0; i < 3; i++) {
-      const geo = new THREE.SphereGeometry(sim.radii[i] || 0.15, 48, 48);
+      const radius = sim.radii[i] || 0.15;
+      const geo = new THREE.SphereGeometry(radius, 48, 48);
       const mat = new THREE.MeshStandardMaterial({
         color: 0xffffff,
         emissive: BODY_COLORS[i],
-        emissiveIntensity: 0.12,
-        roughness: 0.75,
-        metalness: 0.05,
+        emissiveIntensity: 0.15,
+        roughness: 0.65,
+        metalness: 0.1,
       });
 
-      // Load planetary textures asynchronously
       textureLoader.load(
         BODY_TEXTURES[i],
         (tex) => {
           tex.colorSpace = THREE.SRGBColorSpace;
           mat.map = tex;
-          mat.color.set(0xffffff);
           mat.emissiveIntensity = 0.08;
           mat.needsUpdate = true;
         },
         undefined,
-        () => {
-          // Fallback to emissive flat color on load error
-        }
+        () => {}
       );
 
       const mesh = new THREE.Mesh(geo, mat);
       scene.add(mesh);
       bodyMeshesRef.current.push(mesh);
 
-      // Glow halo
-      const glowGeo = new THREE.SphereGeometry((sim.radii[i] || 0.15) * 1.9, 20, 20);
+      // Atmospheric Rayleigh Fresnel Glow
+      const atmosphere = createAtmosphereMesh(radius, BODY_HEX[i]);
+      atmosphere.visible = sim.showAtmosphere !== false;
+      scene.add(atmosphere);
+      atmosphereMeshesRef.current.push(atmosphere);
+
+      // Core glow aura
+      const glowGeo = new THREE.SphereGeometry(radius * 1.8, 24, 24);
       const glowMat = new THREE.MeshBasicMaterial({
         color: BODY_COLORS[i],
         transparent: true,
-        opacity: 0.11,
+        opacity: 0.14,
         depthWrite: false,
+        blending: THREE.AdditiveBlending,
       });
       const glow = new THREE.Mesh(glowGeo, glowMat);
       mesh.add(glow);
 
-      // Pre-allocated trail buffers
-      const arr = new Float32Array(TRAIL_LENGTH * 3);
+      // Velocity-Gradient Orbital Trails
+      const trailPos = new Float32Array(TRAIL_LENGTH * 3);
+      const trailCols = new Float32Array(TRAIL_LENGTH * 3);
       const tgeo = new THREE.BufferGeometry();
-      tgeo.setAttribute('position', new THREE.BufferAttribute(arr, 3));
+      tgeo.setAttribute('position', new THREE.BufferAttribute(trailPos, 3));
+      tgeo.setAttribute('color', new THREE.BufferAttribute(trailCols, 3));
       tgeo.setDrawRange(0, 0);
+
       const tmat = new THREE.LineBasicMaterial({
-        color: BODY_COLORS[i],
+        vertexColors: true,
         transparent: true,
-        opacity: 0.55,
+        opacity: 0.75,
+        blending: THREE.AdditiveBlending,
       });
       const line = new THREE.Line(tgeo, tmat);
       scene.add(line);
       trailLinesRef.current.push(line);
-      trailBuffersRef.current.push({ arr, count: 0 });
+      trailBuffersRef.current.push({ pos: trailPos, cols: trailCols, count: 0 });
 
-      // Velocity Arrow Helper
+      // Velocity Vector Arrow
       const arrow = new THREE.ArrowHelper(
         new THREE.Vector3(0, 1, 0),
         new THREE.Vector3(0, 0, 0),
@@ -265,13 +401,17 @@ export function useThreeSimulation({
     }
 
     // Center of Mass Marker
-    const comGeo = new THREE.SphereGeometry(0.035, 12, 12);
-    const comMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7 });
+    const comGeo = new THREE.SphereGeometry(0.035, 16, 16);
+    const comMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.75,
+    });
     const comMesh = new THREE.Mesh(comGeo, comMat);
     scene.add(comMesh);
     comMarkerRef.current = comMesh;
 
-    // Chaos Lab Twin System "Ghost" Meshes
+    // Chaos Twin Ghost Meshes
     const bMeshes = [];
     for (let i = 0; i < 3; i++) {
       const geo = new THREE.SphereGeometry((sim.radii[i] || 0.15) * 0.85, 16, 16);
@@ -288,7 +428,7 @@ export function useThreeSimulation({
     }
     bodyMeshesBRef.current = bMeshes;
 
-    // Gravitational Field Visualization Elements
+    // Field Grid Objects (12x12)
     const FIELD_N = 12;
     const FIELD_EXTENT = 3.6;
     const fieldGridPoints = [];
@@ -308,21 +448,21 @@ export function useThreeSimulation({
     const linesMat = new THREE.LineBasicMaterial({
       color: 0x6fd3ff,
       transparent: true,
-      opacity: 0.28,
+      opacity: 0.35,
     });
     const fieldLines = new THREE.LineSegments(linesGeo, linesMat);
     fieldLines.visible = false;
     scene.add(fieldLines);
     fieldLinesRef.current = fieldLines;
 
-    // Field Vectors
+    // Vector Field
     const vecPos = new Float32Array(gridCount * 2 * 3);
     const vecGeo = new THREE.BufferGeometry();
     vecGeo.setAttribute('position', new THREE.BufferAttribute(vecPos, 3));
     const vecMat = new THREE.LineBasicMaterial({
       color: 0xb98cff,
       transparent: true,
-      opacity: 0.5,
+      opacity: 0.55,
     });
     const fieldVectors = new THREE.LineSegments(vecGeo, vecMat);
     fieldVectors.visible = false;
@@ -341,10 +481,10 @@ export function useThreeSimulation({
     potGeo.setAttribute('position', new THREE.BufferAttribute(potPos, 3));
     potGeo.setAttribute('color', new THREE.BufferAttribute(potCol, 3));
     const potMat = new THREE.PointsMaterial({
-      size: 0.11,
+      size: 0.12,
       vertexColors: true,
       transparent: true,
-      opacity: 0.8,
+      opacity: 0.85,
       depthWrite: false,
     });
     const fieldPotential = new THREE.Points(potGeo, potMat);
@@ -372,10 +512,10 @@ export function useThreeSimulation({
     const partGeo = new THREE.BufferGeometry();
     partGeo.setAttribute('position', new THREE.BufferAttribute(partPos, 3));
     const partMat = new THREE.PointsMaterial({
-      size: 0.045,
+      size: 0.05,
       color: 0xffcf7a,
       transparent: true,
-      opacity: 0.85,
+      opacity: 0.9,
       depthWrite: false,
     });
     const fieldParticles = new THREE.Points(partGeo, partMat);
@@ -385,19 +525,51 @@ export function useThreeSimulation({
 
     sim.initialEnergy = computeEnergy(sim.state, sim.masses, sim.G).total;
 
+    // Trigger Tidal Shockwave Pulse
+    function spawnShockwave(pos, colorHex = 0x6fd3ff) {
+      const ringGeo = new THREE.RingGeometry(0.05, 0.08, 32);
+      const ringMat = new THREE.MeshBasicMaterial({
+        color: colorHex,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.9,
+        blending: THREE.AdditiveBlending,
+      });
+      const mesh = new THREE.Mesh(ringGeo, ringMat);
+      mesh.position.set(pos[0], pos[1], pos[2]);
+      mesh.rotation.x = Math.PI / 2;
+      shockwaveGroup.add(mesh);
+      shockwavesRef.current.push({ mesh, scale: 1, opacity: 0.9 });
+    }
+
     function pushTrailSample() {
       for (let i = 0; i < 3; i++) {
         const buf = trailBuffersRef.current[i];
         if (!buf) continue;
         const idx = (buf.count % TRAIL_LENGTH) * 3;
-        buf.arr[idx] = sim.state.pos[i][0];
-        buf.arr[idx + 1] = sim.state.pos[i][1];
-        buf.arr[idx + 2] = sim.state.pos[i][2];
+        const pos = sim.state.pos[i];
+        const vel = sim.state.vel[i];
+        const speed = vLen(vel);
+
+        buf.pos[idx] = pos[0];
+        buf.pos[idx + 1] = pos[1];
+        buf.pos[idx + 2] = pos[2];
+
+        // Velocity-Gradient Trail Coloring: White-hot amber at high speed, cyan/violet at cruise
+        const speedRatio = Math.min(1.0, speed / 2.5);
+        const baseColor = new THREE.Color(BODY_HEX[i]);
+        const hotColor = new THREE.Color(0xffffff);
+        const finalColor = baseColor.clone().lerp(hotColor, speedRatio * 0.75);
+
+        buf.cols[idx] = finalColor.r;
+        buf.cols[idx + 1] = finalColor.g;
+        buf.cols[idx + 2] = finalColor.b;
+
         buf.count++;
       }
     }
 
-    // Pointer & Orbit Interaction Handlers
+    // Interaction handlers
     const dom = renderer.domElement;
 
     function pickBodyAt(clientX, clientY) {
@@ -413,6 +585,7 @@ export function useThreeSimulation({
     }
 
     const onPointerDown = (e) => {
+      audio.resume();
       dragRef.current.dragging = true;
       dragRef.current.panning = e.button === 2 || e.shiftKey;
       dragRef.current.lastX = e.clientX;
@@ -429,6 +602,7 @@ export function useThreeSimulation({
       if (wasDrag && !wasPanning && moved < 6) {
         const idx = pickBodyAt(e.clientX, e.clientY);
         if (idx >= 0) {
+          audio.playUiBeep(520, 0.05);
           const now = performance.now();
           const isDbl = now - clickRef.current.time < 400 && clickRef.current.index === idx;
           clickRef.current = { time: now, index: idx };
@@ -479,7 +653,7 @@ export function useThreeSimulation({
       e.preventDefault();
       const cs = camStateRef.current;
       cs.dist *= 1 + e.deltaY * 0.001;
-      cs.dist = Math.max(1.2, Math.min(40, cs.dist));
+      cs.dist = Math.max(1.2, Math.min(45, cs.dist));
     };
 
     const onContextMenu = (e) => e.preventDefault();
@@ -500,7 +674,7 @@ export function useThreeSimulation({
     const resizeObserver = new ResizeObserver(onResize);
     resizeObserver.observe(mount);
 
-    // Main Simulation & Animation Loop
+    // Animation & Physics Loop
     let raf = 0;
     let lastFrameT = performance.now();
     let uiAccum = 0;
@@ -526,6 +700,9 @@ export function useThreeSimulation({
       if (s.running) {
         let remaining = frameDt * s.speed;
         let substeps = 0;
+        let maxSubstepSpeed = 0;
+        let currentMinDist = Infinity;
+
         while (remaining > 0 && substeps < 400) {
           substeps++;
 
@@ -552,6 +729,7 @@ export function useThreeSimulation({
             pushTrailSample();
           } else {
             const minD = minPairDistance(s.state);
+            currentMinDist = Math.min(currentMinDist, minD);
             const closeFactor = minD < 0.08 ? Math.max(0.05, minD / 0.08) : 1;
             const h = Math.min(s.dt * closeFactor, remaining);
             s.state = integrateStep(s.state, s.masses, s.G, h, s.integrator);
@@ -568,20 +746,48 @@ export function useThreeSimulation({
             }
             pushTrailSample();
           }
+
+          s.state.vel.forEach((v) => {
+            const spd = vLen(v);
+            if (spd > maxSubstepSpeed) maxSubstepSpeed = spd;
+          });
         }
 
+        // Close encounter tidal effects & Gravitational Audio Sonification
         const minD2 = minPairDistance(s.state);
+        if (minD2 < 0.22 && maxSubstepSpeed > 1.2) {
+          audio.triggerGravitationalChirp(maxSubstepSpeed, minD2);
+          if (Math.random() < 0.35) {
+            spawnShockwave(s.state.pos[0], BODY_COLORS[0]);
+          }
+        }
+
         if (!Number.isFinite(minD2) || s.state.pos.some((p) => p.some((c) => !Number.isFinite(c)))) {
           s.running = false;
           s.numericalWarning = 'NUMERICAL INSTABILITY DETECTED — reduce dt or switch to RK4.';
         } else if (minD2 < 0.05) {
-          s.numericalWarning = 'CLOSE ENCOUNTER — timestep softened.';
+          s.numericalWarning = 'CLOSE TIDAL ENCOUNTER — timestep softened.';
         } else {
           s.numericalWarning = null;
         }
       }
 
-      // Sync Body Meshes
+      // Update Shockwaves Animation
+      for (let i = shockwavesRef.current.length - 1; i >= 0; i--) {
+        const sw = shockwavesRef.current[i];
+        sw.scale += frameDt * 3.5;
+        sw.opacity -= frameDt * 1.8;
+        sw.mesh.scale.setScalar(sw.scale);
+        sw.mesh.material.opacity = Math.max(0, sw.opacity);
+        if (sw.opacity <= 0) {
+          shockwaveGroup.remove(sw.mesh);
+          sw.mesh.geometry.dispose();
+          sw.mesh.material.dispose();
+          shockwavesRef.current.splice(i, 1);
+        }
+      }
+
+      // Sync Body & Atmosphere Meshes
       for (let i = 0; i < 3; i++) {
         const p = s.state.pos[i];
         if (bodyMeshesRef.current[i]) {
@@ -592,9 +798,30 @@ export function useThreeSimulation({
             ? 0.4
             : bodyMeshesRef.current[i].material.map
             ? 0.08
-            : 0.12;
+            : 0.15;
           bodyMeshesRef.current[i].scale.setScalar(isSel ? 1.18 : 1.0);
         }
+        if (atmosphereMeshesRef.current[i]) {
+          atmosphereMeshesRef.current[i].position.set(p[0], p[1], p[2]);
+          atmosphereMeshesRef.current[i].visible = s.showAtmosphere !== false;
+        }
+      }
+
+      // Sync Lagrange Points L1 - L5
+      if (s.showLagrange && lagrangeGroupRef.current) {
+        lagrangeGroupRef.current.visible = true;
+        const lPoints = computeLagrangePoints(s.state.pos, s.masses, s.G);
+        lMarkers.forEach((marker, idx) => {
+          if (lPoints[idx]) {
+            marker.position.set(lPoints[idx].pos[0], lPoints[idx].pos[1], lPoints[idx].pos[2]);
+            marker.rotation.z += frameDt * 0.8;
+            marker.visible = true;
+          } else {
+            marker.visible = false;
+          }
+        });
+      } else if (lagrangeGroupRef.current) {
+        lagrangeGroupRef.current.visible = false;
       }
 
       // Sync Chaos Twin Meshes
@@ -624,7 +851,7 @@ export function useThreeSimulation({
       if (spacetimeGridRef.current) spacetimeGridRef.current.visible = s.showSpacetime;
       if (axesHelperRef.current) axesHelperRef.current.visible = s.showAxes;
 
-      // Sync Gravitational Field Views
+      // Gravitational Field Views
       if (fieldLinesRef.current) fieldLinesRef.current.visible = s.fieldMode === 'lines';
       if (fieldVectorsRef.current) fieldVectorsRef.current.visible = s.fieldMode === 'vectors';
       if (fieldPotentialRef.current) fieldPotentialRef.current.visible = s.fieldMode === 'potential';
@@ -658,7 +885,7 @@ export function useThreeSimulation({
         posAttr.needsUpdate = true;
       }
 
-      // Sync Trails
+      // Sync Velocity-Gradient Orbital Trails
       if (s.trailsOn) {
         for (let i = 0; i < 3; i++) {
           const buf = trailBuffersRef.current[i];
@@ -667,6 +894,7 @@ export function useThreeSimulation({
             line.visible = true;
             const n = Math.min(buf.count, TRAIL_LENGTH);
             line.geometry.attributes.position.needsUpdate = true;
+            line.geometry.attributes.color.needsUpdate = true;
             line.geometry.setDrawRange(0, n);
           }
         }
@@ -718,7 +946,7 @@ export function useThreeSimulation({
         });
       }
 
-      // Camera Animation / Tracking
+      // Camera Tracking & Smooth Interpolation
       const cs = camStateRef.current;
       if (['body0', 'body1', 'body2'].includes(cs.mode)) {
         const idx = Number(cs.mode.slice(4));
@@ -777,20 +1005,29 @@ export function useThreeSimulation({
         ]);
         const distInfo = computePairDistances(s.state);
 
-        // Spacetime fabric mesh potential warp
+        // Spacetime Fabric Deformation & Tension Gradient Coloring
         if (s.showSpacetime && spacetimeGridRef.current) {
-          const arr = spacetimeGridRef.current.geometry.attributes.position.array;
+          const posArr = spacetimeGridRef.current.geometry.attributes.position.array;
+          const colArr = spacetimeGridRef.current.geometry.attributes.color.array;
+
           for (let i = 0; i < ST_N * ST_N; i++) {
-            const x = arr[i * 3];
-            const z = arr[i * 3 + 2];
+            const x = posArr[i * 3];
+            const z = posArr[i * 3 + 2];
             const u = computePotentialAt([x, ST_BASE_Y, z], s.state.pos, s.masses, s.G);
-            const depth = Math.max(-1.6, u * 0.55);
-            arr[i * 3 + 1] = ST_BASE_Y + depth;
+            const depth = Math.max(-1.8, u * 0.55);
+            posArr[i * 3 + 1] = ST_BASE_Y + depth;
+
+            // Tension color: deep well (purple/amber) -> flat space (cyan)
+            const strain = Math.min(1.0, Math.abs(depth) / 1.5);
+            colArr[i * 3] = 0.25 + strain * 0.75;      // Red
+            colArr[i * 3 + 1] = 0.65 - strain * 0.45;  // Green
+            colArr[i * 3 + 2] = 0.95 - strain * 0.35;  // Blue
           }
           spacetimeGridRef.current.geometry.attributes.position.needsUpdate = true;
+          spacetimeGridRef.current.geometry.attributes.color.needsUpdate = true;
         }
 
-        // Gravitational field grid updates
+        // Gravitational Field Grid updates
         if (
           (s.fieldMode === 'lines' && fieldLinesRef.current) ||
           (s.fieldMode === 'vectors' && fieldVectorsRef.current)
@@ -844,7 +1081,7 @@ export function useThreeSimulation({
           }
         }
 
-        // Rolling history recording
+        // Rolling history & Phase Space recording
         if (s.running && historyRef.current) {
           const H = historyRef.current;
           const accel = computeAccelerations(s.state.pos, s.masses, s.G);
@@ -878,6 +1115,15 @@ export function useThreeSimulation({
           H.d01.push(distInfo.pairs.d01);
           H.d02.push(distInfo.pairs.d02);
           H.d12.push(distInfo.pairs.d12);
+
+          // Phase Space records
+          H.phase0X.push(s.state.pos[0][0]);
+          H.phase0Vx.push(s.state.vel[0][0]);
+          H.phase1X.push(s.state.pos[1][0]);
+          H.phase1Vx.push(s.state.vel[1][0]);
+          H.phase2X.push(s.state.pos[2][0]);
+          H.phase2Vx.push(s.state.vel[2][0]);
+
           if (s.chaosOn && sysBRef.current) {
             H.chaosT.push(s.simTime - s.chaosT0);
             H.sep.push(chaosSep);
