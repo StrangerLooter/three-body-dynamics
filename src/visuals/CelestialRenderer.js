@@ -105,13 +105,22 @@ export class CelestialRenderer {
                     if (mat.map) {
                       mat.map.colorSpace = THREE.SRGBColorSpace;
                     }
+                    if (mat.emissiveMap) {
+                      mat.emissiveMap.colorSpace = THREE.SRGBColorSpace;
+                    }
 
                     if (i === 0) {
-                      // Sun: Natural solar luminance using its own texture map
+                      // Sun: Natural solar luminance
                       if (mat.map) {
                         mat.emissiveMap = mat.map;
                         mat.emissive = new THREE.Color(0xffffff);
-                        mat.emissiveIntensity = 0.9;
+                        mat.emissiveIntensity = 1.0;
+                      } else if (mat.emissiveMap) {
+                        mat.emissive = new THREE.Color(0xffffff);
+                        mat.emissiveIntensity = 1.0;
+                      } else {
+                        mat.emissive = mat.color ? mat.color.clone() : new THREE.Color(0xffaa22);
+                        mat.emissiveIntensity = 0.85;
                       }
                     } else {
                       // Earth & Mars: Pure natural PBR planetary surface

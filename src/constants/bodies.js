@@ -4,7 +4,7 @@ export const BODY_NAMES = ['BODY 01 (Sun)', 'BODY 02 (Earth)', 'BODY 03 (Mars)']
 
 // 3D GLTF / GLB Models in public/models/ or CDN URLs
 export const BODY_MODELS = [
-  '/models/sun_with_2k_textures.glb',
+  '/models/sun.glb',
   '/models/earth_-_16k_high_resolution.glb',
   '/models/mars.glb',
 ];
