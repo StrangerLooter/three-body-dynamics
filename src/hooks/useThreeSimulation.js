@@ -531,8 +531,13 @@ export function useThreeSimulation({
         -((clientY - rect.top) / rect.height) * 2 + 1
       );
       raycasterRef.current.setFromCamera(ndc, camera);
-      const hits = raycasterRef.current.intersectObjects(celestialRenderer.bodyMeshes);
-      if (hits.length) return celestialRenderer.bodyMeshes.indexOf(hits[0].object);
+      const hits = raycasterRef.current.intersectObjects(celestialRenderer.bodyMeshes, true);
+      if (hits.length) {
+        if (hits[0].object.userData?.bodyIndex !== undefined) {
+          return hits[0].object.userData.bodyIndex;
+        }
+        return celestialRenderer.bodyMeshes.indexOf(hits[0].object);
+      }
       return -1;
     }
 
@@ -927,9 +932,9 @@ export function useThreeSimulation({
       if (s.showLabels && labelRefs?.current && celestialRendererRef.current) {
         for (let i = 0; i < 3; i++) {
           const el = labelRefs.current[i];
-          const mesh = celestialRendererRef.current.bodyMeshes[i];
-          if (!el || !mesh) continue;
-          const p = mesh.position.clone();
+          const group = celestialRendererRef.current.bodyGroups?.[i];
+          if (!el || !group) continue;
+          const p = group.position.clone();
           p.project(camera);
           const x = (p.x * 0.5 + 0.5) * mount.clientWidth;
           const y = (-p.y * 0.5 + 0.5) * mount.clientHeight;
