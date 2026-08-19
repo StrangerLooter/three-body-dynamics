@@ -2,21 +2,18 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import {
   BODY_COLORS,
-  BODY_HEX,
   BODY_MODELS,
   BODY_ROT_SPEED,
 } from '../constants/bodies.js';
-import { createAtmosphereMesh } from './shaders/AtmosphereShader.js';
 
 export class CelestialRenderer {
   constructor(scene, initialRadii = [0.18, 0.14, 0.12]) {
     this.scene = scene;
     this.radii = initialRadii;
     this.bodyGroups = [];
-    this.bodyMeshes = []; // Pickable hitboxes
+    this.bodyMeshes = []; // Pickable hitboxes for clicking
     this.modelPivots = [null, null, null];
-    this.atmosphereMeshes = [];
-    this.glowMeshes = [];
+    this.selectionRings = [];
     this.clock = 0;
 
     this.initBodies();
@@ -31,8 +28,8 @@ export class CelestialRenderer {
       this.scene.add(group);
       this.bodyGroups.push(group);
 
-      // 1. Invisible Raycasting Hitbox for reliable click & hover detection
-      const hitGeo = new THREE.SphereGeometry(radius * 1.25, 16, 16);
+      // 1. Invisible Raycasting Hitbox for precision click & selection
+      const hitGeo = new THREE.SphereGeometry(radius * 1.2, 16, 16);
       const hitMat = new THREE.MeshBasicMaterial({
         visible: false,
         depthWrite: false,
@@ -42,25 +39,23 @@ export class CelestialRenderer {
       group.add(hitMesh);
       this.bodyMeshes.push(hitMesh);
 
-      // 2. High-performance Fallback / Loading Sphere Placeholder
+      // 2. High-performance Fallback Sphere (only visible during loading)
       const fallbackGeo = new THREE.SphereGeometry(radius, 32, 32);
       const fallbackMat = new THREE.MeshStandardMaterial({
         color: BODY_COLORS[i],
-        emissive: BODY_COLORS[i],
-        emissiveIntensity: i === 0 ? 0.75 : 0.2,
-        roughness: 0.55,
-        metalness: 0.15,
+        roughness: 0.7,
+        metalness: 0.1,
       });
       const fallbackMesh = new THREE.Mesh(fallbackGeo, fallbackMat);
       group.add(fallbackMesh);
 
-      // 3. Load Real 3D GLB Model
+      // 3. Crisp, Realistic 3D Model Loading
       const modelPath = BODY_MODELS[i];
       if (modelPath) {
         gltfLoader.load(
           modelPath,
           (gltf) => {
-            // Remove temporary fallback placeholder
+            // Remove loading placeholder
             group.remove(fallbackMesh);
             fallbackGeo.dispose();
             fallbackMat.dispose();
@@ -78,7 +73,7 @@ export class CelestialRenderer {
             // Target diameter is radius * 2
             const targetScale = (radius * 2) / maxDim;
 
-            // Center internal geometry at (0,0,0) of pivot
+            // Center internal geometry at origin
             model.position.set(
               -center.x * targetScale,
               -center.y * targetScale,
@@ -86,13 +81,13 @@ export class CelestialRenderer {
             );
             model.scale.setScalar(targetScale);
 
-            // Pivot group for smooth planetary self-rotation
+            // Pivot group for smooth axial self-rotation
             const pivot = new THREE.Group();
             pivot.add(model);
             group.add(pivot);
             this.modelPivots[i] = pivot;
 
-            // Traverse and enhance material aesthetics
+            // Traverse and preserve pure photorealistic textures
             model.traverse((child) => {
               if (child.isMesh) {
                 child.castShadow = true;
@@ -100,21 +95,25 @@ export class CelestialRenderer {
                 child.userData = { bodyIndex: i };
 
                 if (child.material) {
-                  // Ensure correct SRGB color space on textures
+                  // Ensure correct SRGB color space for authentic textures
                   if (child.material.map) {
                     child.material.map.colorSpace = THREE.SRGBColorSpace;
                   }
 
+                  // Clear any artificial neon emissive overrides
                   if (i === 0) {
-                    // Sun Stellar Core Glow
-                    child.material.emissive = new THREE.Color(0xff8811);
-                    child.material.emissiveIntensity = 0.85;
-                    child.material.roughness = 0.35;
+                    // Sun: Natural solar luminance using its own texture map
+                    if (child.material.map) {
+                      child.material.emissiveMap = child.material.map;
+                      child.material.emissive = new THREE.Color(0xffffff);
+                      child.material.emissiveIntensity = 0.9;
+                    }
                   } else {
+                    // Earth & Mars: Pure natural PBR planetary surface
+                    child.material.emissive = new THREE.Color(0x000000);
+                    child.material.emissiveIntensity = 0;
                     child.material.roughness = 0.65;
-                    child.material.metalness = 0.12;
-                    child.material.emissive = new THREE.Color(BODY_COLORS[i]);
-                    child.material.emissiveIntensity = 0.08;
+                    child.material.metalness = 0.05;
                   }
                   child.material.needsUpdate = true;
                 }
@@ -128,59 +127,45 @@ export class CelestialRenderer {
         );
       }
 
-      // 4. Rayleigh Atmospheric Fresnel Glow Rim
-      const atmos = createAtmosphereMesh(radius, BODY_HEX[i], 0.95, 2.3);
-      this.scene.add(atmos);
-      this.atmosphereMeshes.push(atmos);
-
-      // 5. Additive Neon Aura Outer Halo
-      const glowGeo = new THREE.SphereGeometry(radius * 1.55, 24, 24);
-      const glowMat = new THREE.MeshBasicMaterial({
+      // 4. Subtle, Sci-Fi Target Selection Ring (only visible when selected)
+      const ringGeo = new THREE.RingGeometry(radius * 1.35, radius * 1.45, 48);
+      const ringMat = new THREE.MeshBasicMaterial({
         color: BODY_COLORS[i],
+        side: THREE.DoubleSide,
         transparent: true,
-        opacity: i === 0 ? 0.35 : 0.18,
+        opacity: 0,
         depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        side: THREE.BackSide,
       });
-      const glow = new THREE.Mesh(glowGeo, glowMat);
-      group.add(glow);
-      this.glowMeshes.push(glow);
+      const ring = new THREE.Mesh(ringGeo, ringMat);
+      ring.rotation.x = Math.PI / 2;
+      group.add(ring);
+      this.selectionRings.push(ring);
     }
   }
 
-  update(frameDt, state, selectedIdx, showAtmosphere = true) {
+  update(frameDt, state, selectedIdx) {
     this.clock += frameDt;
 
     for (let i = 0; i < 3; i++) {
       const p = state.pos[i];
       const group = this.bodyGroups[i];
-      const atmos = this.atmosphereMeshes[i];
       const pivot = this.modelPivots[i];
-      const glow = this.glowMeshes[i];
+      const ring = this.selectionRings[i];
 
       if (group) {
         group.position.set(p[0], p[1], p[2]);
 
         const isSel = selectedIdx === i;
-        group.scale.setScalar(isSel ? 1.15 : 1.0);
-
-        if (glow) {
-          glow.material.opacity = isSel
-            ? 0.45
-            : i === 0
-            ? 0.32
-            : 0.16;
+        if (ring) {
+          ring.material.opacity = isSel ? 0.75 : 0;
+          if (isSel) {
+            ring.rotation.z += frameDt * 0.8;
+          }
         }
       }
 
       if (pivot) {
         pivot.rotation.y += BODY_ROT_SPEED[i] * frameDt;
-      }
-
-      if (atmos) {
-        atmos.position.set(p[0], p[1], p[2]);
-        atmos.visible = showAtmosphere;
       }
     }
   }
@@ -198,11 +183,6 @@ export class CelestialRenderer {
           }
         }
       });
-    });
-    this.atmosphereMeshes.forEach((m) => {
-      this.scene.remove(m);
-      m.geometry?.dispose();
-      m.material?.dispose();
     });
   }
 }

@@ -177,15 +177,15 @@ export function useThreeSimulation({
     mount.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // Cinematic Lighting
-    scene.add(new THREE.AmbientLight(0x354a6b, 1.2));
-    const key = new THREE.PointLight(0xffffff, 1.6, 0, 1.8);
-    key.position.set(5, 6, 7);
-    scene.add(key);
+    // Crisp Natural Solar & Space Lighting for Real 3D Models
+    scene.add(new THREE.AmbientLight(0xffffff, 1.35));
+    const sunLight = new THREE.DirectionalLight(0xffffff, 2.2);
+    sunLight.position.set(8, 10, 10);
+    scene.add(sunLight);
 
-    const rim = new THREE.DirectionalLight(0x6fd3ff, 0.5);
-    rim.position.set(-5, -4, -6);
-    scene.add(rim);
+    const fillLight = new THREE.DirectionalLight(0xddeeff, 0.7);
+    fillLight.position.set(-8, -6, -8);
+    scene.add(fillLight);
 
     // Deep Space Cosmic Skybox
     scene.add(buildDeepSpaceSkybox());
