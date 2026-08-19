@@ -3,14 +3,29 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Three-Body Dynamics</title>
+    <title>Three-Body Dynamics — 3D Numerical Gravitational Simulator & Chaos Lab</title>
+    <meta name="description" content="A professional 3D numerical simulation of the classical Three-Body Problem featuring RK4, Velocity Verlet, Euler integrators, Chaos Lab, spacetime fabric warping, and Groq AI tutor." />
+    <meta name="theme-color" content="#02040a" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-      html, body, #root { margin: 0; padding: 0; width: 100%; height: 100%; background: #02040a; overflow: hidden; }
-      * { box-sizing: border-box; }
+      html, body, #root {
+        margin: 0;
+        padding: 0;
+        width: 100%;
+        height: 100%;
+        background: #02040a;
+        overflow: hidden;
+        font-family: 'JetBrains Mono', monospace;
+      }
+      * {
+        box-sizing: border-box;
+      }
     </style>
   </head>
-  <body>
+  <body class="bg-[#02040a] text-slate-200">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

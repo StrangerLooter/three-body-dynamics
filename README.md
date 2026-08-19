@@ -1,55 +1,146 @@
 # Three-Body Dynamics
 
-**A professional 3D numerical simulation of the classical Three-Body Problem**
-Built by **Ram Vishwakarma** — B.Sc. Physics (Hons.), IEHE Bhopal | College Model Competition Project
+**A professional 3D numerical simulation & chaos laboratory for the classical Three-Body Problem**
 
-🌐 **Live:** https://three-body-dynamics.vercel.app
+Built by **Ram Vishwakarma, Abhishek, and Mukul** — B.Sc. Physics (Hons.), IEHE Bhopal | College Model Competition Project
+
+🌐 **Live Demo:** [https://three-body-dynamics.vercel.app](https://three-body-dynamics.vercel.app)
 
 ---
 
-## Features (Phases 1–8)
+## 🌌 Overview
 
-| Phase | Feature |
-|-------|---------|
-| 1 | RK4 physics engine, 3D scene, starfield, play/pause/reset |
-| 2 | 9 camera modes (Follow Body, COM, Top/Front/Side, Auto Orbit) |
-| 3 | Adaptive timestep, close-encounter softening, body editing |
-| 4 | Full telemetry — energy, momentum, pairwise distances |
-| 5 | Analysis drawer — SVG graphs for energy/momentum/error/distances |
-| 6 | Chaos Lab — twin systems A/B, perturbation, approx. Lyapunov exponent |
-| 7 | Gravitational field viz — field lines, vector field, particle flow, potential contours |
-| 8 | Export CSV/JSON, screenshot, fullscreen, keyboard shortcuts, AI chatbot (Groq) |
+Three-Body Dynamics is a real-time, interactive, GPU-accelerated numerical simulator that brings the beauty and chaotic unpredictability of celestial mechanics to life. Built using raw Three.js and React 18, it couples high-accuracy numerical integrators with rich physical telemetry, spacetime fabric curvature, gravitational field visualization, and an AI physics tutor.
 
-## Extra Upgrades
-- **Real planet textures** — Earth, Moon, Venus loaded from CDN
-- **Spacetime fabric grid** — white mesh warped by real gravitational potential
-- **AI Physics Assistant** — Groq-powered chatbot with live simulation context
+---
 
-## Run Locally
+## 🚀 Key Features
 
+| Domain | Features |
+|---|---|
+| **Physics Engine** | 4th-Order Runge-Kutta (RK4), Velocity Verlet, and Euler integrators with adaptive timestepping & singularity softening |
+| **Orbit Presets** | Chenciner-Montgomery Figure-8 Choreography, Hierarchical Triple, Equal-Mass Chaos, Restricted Three-Body |
+| **Chaos Lab** | Real-time twin system perturbation ($A/B$), divergence tracking, and numerical Lyapunov exponent ($\lambda$) estimation |
+| **Field Visualization** | Directional field lines, magnitude-encoded vector fields, potential well heatmap contours, tracer particle flow |
+| **Spacetime Mesh** | 3D fabric mesh dynamically warped according to the exact gravitational potential well $U(r)$ |
+| **Scientific Telemetry** | Total energy, kinetic/potential energy, linear momentum $\vec{P}$, angular momentum $\vec{L}$, center of mass, pairwise distances |
+| **Analysis Drawer** | Real-time multi-series SVG graphs, rolling telemetry buffers, CSV and JSON scientific data export |
+| **AI Physics Tutor** | Groq-powered assistant with live telemetry awareness, TTS voice narration, physics quizzes, and judge mode |
+| **Camera & Visuals** | 9 camera modes (Free Orbit, Follow Body 1–3, Follow COM, Orthographic Top/Front/Side, Auto Orbit), trails, velocity vectors |
+
+---
+
+## 🛠️ Architecture & Folder Structure
+
+```
+three-body-dynamics/
+├── .env.example              # Environment variables template
+├── .gitignore                # Git ignore rules (node_modules, .env, dist)
+├── index.html                # Application entry HTML with JetBrains Mono font
+├── package.json              # Dependencies and build scripts
+├── vercel.json               # Vercel deployment configuration
+├── vite.config.js            # Vite build configuration with Rollup chunk splitting
+└── src/
+    ├── App.jsx               # Master orchestrator component
+    ├── main.jsx              # React root mount
+    ├── index.css             # Theme tokens, custom dark scrollbars, and glows
+    ├── Simulator.jsx         # Backward-compatibility alias export
+    ├── physics/              # Pure mathematical and physics algorithms
+    │   ├── vectorMath.js     # 3D vector arithmetic (pure math, 0 dependencies)
+    │   ├── gravity.js        # Newtonian mutual gravity and field potential
+    │   ├── integrators.js    # Euler, Velocity Verlet, RK4, Step-doubling adaptive
+    │   ├── conservation.js   # Energy, momentum, COM, and distance metrics
+    │   ├── chaos.js          # Phase-space divergence and Lyapunov calculation
+    │   ├── presets.js        # Figure-8, Hierarchical, Chaos, Restricted configurations
+    │   └── index.js          # Barrel export
+    ├── constants/            # Constants and configuration
+    │   ├── bodies.js         # Textures, colors, radius, spin rates, trail buffers
+    │   ├── cameraModes.js    # Camera tracking modes
+    │   ├── exportKeys.js     # Telemetry CSV/JSON headers
+    │   ├── shortcuts.js      # Hotkey definitions
+    │   └── index.js          # Barrel export
+    ├── services/             # External integration and export services
+    │   ├── aiService.js      # Groq API client with state snapshotting & NLP control
+    │   ├── speechService.js  # Web Speech API text-to-speech synthesis
+    │   └── exportService.js  # CSV/JSON file generation and canvas screenshots
+    ├── hooks/                # Custom React hooks
+    │   ├── useThreeSimulation.js # Three.js scene, renderer, particle loop, controls
+    │   └── useKeyboardShortcuts.js # Global hotkey listeners
+    └── components/           # Reusable UI component layer
+        ├── common/           # Buttons, numeric inputs, section layouts, toggles
+        ├── overlay/          # Welcome screen, shortcuts modal, WebGL error fallback
+        ├── panels/           # Top status bar, bottom transport bar, control panels
+        ├── analysis/         # Telemetry drawer & scalable SVG MultiLineChart
+        └── chat/             # Groq AI tutor panel & API key configuration modal
+```
+
+---
+
+## ⚡ Getting Started
+
+### 1. Clone the repository
+```bash
+git clone https://github.com/StrangerLooter/three-body-dynamics.git
+cd three-body-dynamics
+```
+
+### 2. Install dependencies
 ```bash
 npm install
+```
+
+### 3. Setup environment variables (Optional)
+```bash
+cp .env.example .env
+```
+Add your free Groq API key in `.env` or configure it directly in the in-app settings (⚙):
+```env
+VITE_GROQ_API_KEY=your_groq_api_key_here
+```
+
+### 4. Start local development server
+```bash
 npm run dev
 ```
 
-## Deploy to Vercel
-
+### 5. Build for production
 ```bash
-npm install -g vercel
-vercel --prod
+npm run build
 ```
 
-## Tech Stack
-- React 18 + Three.js (raw, no R3F)
-- Vite 5
-- Tailwind CSS (CDN)
-- Groq API (gpt OSS 120b)
+---
 
-## Physics
-- Newtonian gravity: `a_i = G Σ m_j (r_j - r_i) / |r_j - r_i|³`
-- Integrators: RK4 (default), Velocity Verlet, Euler
-- Conservation: total energy, linear momentum, angular momentum
-- Dimensionless normalized units
+## ⌨️ Keyboard Shortcuts
+
+| Key | Action |
+|---|---|
+| `SPACE` | Play / Pause simulation |
+| `R` | Reset to initial conditions |
+| `F` | Focus camera on selected body |
+| `C` | Cycle through camera modes |
+| `T` | Toggle particle orbital trails |
+| `V` | Toggle velocity vector arrows |
+| `A` | Toggle analysis telemetry drawer |
+| `?` | Toggle keyboard shortcuts overlay |
+| `ESC` | Close active modals / drawers |
 
 ---
-*Made with AI tools (Claude by Anthropic) — Ram Vishwakarma, 2026*
+
+## 📜 Physics Principles
+
+- **Newton's Law of Universal Gravitation:**
+  $$\vec{a}_i = G \sum_{j \neq i} \frac{m_j (\vec{r}_j - \vec{r}_i)}{(|\vec{r}_j - \vec{r}_i|^2 + \epsilon^2)^{3/2}}$$
+
+- **Conservation Laws:**
+  - Total Energy: $E = K + U = \frac{1}{2}\sum m_i |\vec{v}_i|^2 - G \sum_{i < j} \frac{m_i m_j}{|\vec{r}_j - \vec{r}_i|}$
+  - Linear Momentum: $\vec{P} = \sum m_i \vec{v}_i = \text{const}$
+  - Angular Momentum: $\vec{L} = \sum (\vec{r}_i \times m_i \vec{v}_i) = \text{const}$
+
+---
+
+## 👥 Team
+- **Ram Vishwakarma**
+- **Abhishek**
+- **Mukul**
+
+*IEHE Bhopal — Physics Model Project 2026*
