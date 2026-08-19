@@ -48,7 +48,7 @@ function makeInitialSimState(presetKey = 'figureEight') {
   return {
     presetKey,
     masses: [...preset.masses],
-    radii: [...(preset.radii || [0.16, 0.16, 0.12])],
+    radii: [...(preset.radii || [0.16, 0.14, 0.11])],
     state: JSON.parse(JSON.stringify(preset.state)),
     initialState: JSON.parse(JSON.stringify(preset.state)),
     G: 1,
@@ -189,7 +189,6 @@ export default function App() {
     };
 
     setWarnings((prev) => {
-      // Retain max 3 concurrent warnings
       const next = [...prev, newWarning];
       if (next.length > 3) next.shift();
       return next;
@@ -255,7 +254,6 @@ export default function App() {
     loadEditVals(ui.selected, ui.editMode);
   }, [ui.selected, ui.editMode, loadEditVals]);
 
-  // Simulation Actions
   const clearHistoryArrays = () => {
     const H = historyRef.current;
     if (H) Object.keys(H).forEach((k) => (H[k] = []));
@@ -351,7 +349,18 @@ export default function App() {
     }
     clearHistoryArrays();
     setWarnings([]);
+
+    // Optimal camera distance auto-framing per preset
+    const presetDistances = {
+      figureEight: 6.5,
+      hierarchical: 7.2,
+      chaos: 6.8,
+      restricted: 8.0,
+    };
     camStateRef.current.mode = 'free';
+    camStateRef.current.dist = presetDistances[key] || 6.5;
+    camStateRef.current.target.set(0, 0, 0);
+
     setUi((p) => ({
       ...p,
       running: false,
@@ -665,7 +674,6 @@ export default function App() {
     };
   }, [narrateTimer]);
 
-  // Keyboard Hotkeys
   useKeyboardShortcuts({
     enabled: entered,
     onTogglePlay: togglePlay,

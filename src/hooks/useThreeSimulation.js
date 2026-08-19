@@ -30,7 +30,6 @@ import { audio } from '../services/audioService.js';
 function buildDeepSpaceSkybox() {
   const root = new THREE.Group();
 
-  // 1. Multi-spectrum stellar layers (O/B Blue giants, G White/Yellow, M Red Dwarfs)
   const starSpectra = [
     { count: 1800, radius: 80, size: 0.12, color: 0x8bbaff, opacity: 0.75 },
     { count: 1600, radius: 65, size: 0.14, color: 0xffffff, opacity: 0.9 },
@@ -61,7 +60,6 @@ function buildDeepSpaceSkybox() {
     root.add(new THREE.Points(geo, mat));
   });
 
-  // 2. Cosmic Nebula Clouds (Procedural cosmic dust particles)
   const NEBULA_COUNT = 350;
   const nebPos = new Float32Array(NEBULA_COUNT * 3);
   const nebColors = new Float32Array(NEBULA_COUNT * 3);
@@ -130,6 +128,7 @@ export function useThreeSimulation({
   const lagrangeGroupRef = useRef(null);
   const shockwaveGroupRef = useRef(null);
   const shockwavesRef = useRef([]);
+  const explosionsRef = useRef([]);
 
   const fieldLinesRef = useRef(null);
   const fieldVectorsRef = useRef(null);
@@ -138,6 +137,7 @@ export function useThreeSimulation({
   const fieldParticleDataRef = useRef([]);
 
   const lastWarningTimeRef = useRef(0);
+  const lastExplosionTimeRef = useRef(0);
   const raycasterRef = useRef(new THREE.Raycaster());
   const dragRef = useRef({ dragging: false, panning: false, lastX: 0, lastY: 0, moved: 0 });
   const clickRef = useRef({ time: 0, index: -1 });
@@ -266,17 +266,16 @@ export function useThreeSimulation({
     scene.add(lagrangeGroup);
     lagrangeGroupRef.current = lagrangeGroup;
 
-    // Shockwave Rings Group
+    // Shockwave & Explosion Group
     const shockwaveGroup = new THREE.Group();
     scene.add(shockwaveGroup);
     shockwaveGroupRef.current = shockwaveGroup;
 
-    // Instantiate Modular Celestial Renderer
+    // Modular Celestial Renderer
     const sim = simRef.current;
     const celestialRenderer = new CelestialRenderer(scene, sim.radii);
     celestialRendererRef.current = celestialRenderer;
 
-    // Velocity-Gradient Trails & Vector Arrows Setup
     trailLinesRef.current = [];
     trailBuffersRef.current = [];
     arrowsRef.current = [];
@@ -300,7 +299,6 @@ export function useThreeSimulation({
       trailLinesRef.current.push(line);
       trailBuffersRef.current.push({ pos: trailPos, cols: trailCols, count: 0 });
 
-      // Velocity Vector Arrow
       const arrow = new THREE.ArrowHelper(
         new THREE.Vector3(0, 1, 0),
         new THREE.Vector3(0, 0, 0),
@@ -449,6 +447,53 @@ export function useThreeSimulation({
       mesh.rotation.x = Math.PI / 2;
       shockwaveGroup.add(mesh);
       shockwavesRef.current.push({ mesh, scale: 1, opacity: 0.9 });
+    }
+
+    // Kinetic Collision Debris Particle Burst Explosion
+    function spawnCollisionExplosion(pos, colorHex = 0xff4433) {
+      const COUNT = 48;
+      const pPositions = new Float32Array(COUNT * 3);
+      const velocities = [];
+
+      for (let i = 0; i < COUNT; i++) {
+        pPositions[i * 3] = pos[0];
+        pPositions[i * 3 + 1] = pos[1];
+        pPositions[i * 3 + 2] = pos[2];
+
+        // Random radial explosion velocity
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2 * Math.random() - 1);
+        const spd = 0.8 + Math.random() * 2.2;
+        velocities.push([
+          spd * Math.sin(phi) * Math.cos(theta),
+          spd * Math.sin(phi) * Math.sin(theta),
+          spd * Math.cos(phi),
+        ]);
+      }
+
+      const pGeo = new THREE.BufferGeometry();
+      pGeo.setAttribute('position', new THREE.BufferAttribute(pPositions, 3));
+      const pMat = new THREE.PointsMaterial({
+        size: 0.09,
+        color: colorHex,
+        transparent: true,
+        opacity: 1.0,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+      });
+
+      const pMesh = new THREE.Points(pGeo, pMat);
+      shockwaveGroup.add(pMesh);
+      explosionsRef.current.push({
+        mesh: pMesh,
+        geo: pGeo,
+        mat: pMat,
+        velocities,
+        age: 0,
+        maxAge: 0.85,
+      });
+
+      spawnShockwave(pos, 0xff3333);
     }
 
     function pushTrailSample() {
@@ -657,7 +702,7 @@ export function useThreeSimulation({
           });
         }
 
-        // Close Encounter & Collision Detection with Warning Notifications
+        // Close Encounter & Collision Detection with Warning Notifications & Particle Explosions
         const distInfo = computePairDistances(s.state);
         const minD = distInfo.min;
 
@@ -671,13 +716,16 @@ export function useThreeSimulation({
             level = 'CRITICAL';
             title = 'POTENTIAL COLLISION IMMINENT!';
             desc = 'High impact velocity predicted between converging bodies.';
+            if (now - lastExplosionTimeRef.current > 1500) {
+              lastExplosionTimeRef.current = now;
+              spawnCollisionExplosion(s.state.pos[0], 0xff3838);
+            }
           } else if (minD < 0.11) {
             level = 'WARNING';
             title = 'CLOSE ENCOUNTER DETECTED';
             desc = 'Orbital periastron compression detected in gravitational well.';
           }
 
-          // Determine closest pair
           let pairNames = `${BODY_NAMES[0]} and ${BODY_NAMES[1]}`;
           if (distInfo.pairs.d02 === minD) pairNames = `${BODY_NAMES[0]} and ${BODY_NAMES[2]}`;
           if (distInfo.pairs.d12 === minD) pairNames = `${BODY_NAMES[1]} and ${BODY_NAMES[2]}`;
@@ -723,7 +771,33 @@ export function useThreeSimulation({
         }
       }
 
-      // Update Celestial Bodies via Modular CelestialRenderer
+      // Update Collision Explosions Debris Animation
+      for (let i = explosionsRef.current.length - 1; i >= 0; i--) {
+        const exp = explosionsRef.current[i];
+        exp.age += frameDt;
+        const posArr = exp.geo.attributes.position.array;
+
+        for (let k = 0; k < exp.velocities.length; k++) {
+          posArr[k * 3] += exp.velocities[k][0] * frameDt;
+          posArr[k * 3 + 1] += exp.velocities[k][1] * frameDt;
+          posArr[k * 3 + 2] += exp.velocities[k][2] * frameDt;
+          // Drag friction
+          exp.velocities[k][0] *= 0.96;
+          exp.velocities[k][1] *= 0.96;
+          exp.velocities[k][2] *= 0.96;
+        }
+        exp.geo.attributes.position.needsUpdate = true;
+        exp.mat.opacity = Math.max(0, 1 - exp.age / exp.maxAge);
+
+        if (exp.age >= exp.maxAge) {
+          shockwaveGroup.remove(exp.mesh);
+          exp.geo.dispose();
+          exp.mat.dispose();
+          explosionsRef.current.splice(i, 1);
+        }
+      }
+
+      // Update Celestial Bodies
       if (celestialRendererRef.current) {
         celestialRendererRef.current.update(
           frameDt,
@@ -733,7 +807,7 @@ export function useThreeSimulation({
         );
       }
 
-      // Sync Lagrange Points L1 - L5
+      // Sync Lagrange Points
       if (s.showLagrange && lagrangeGroupRef.current) {
         lagrangeGroupRef.current.visible = true;
         const lPoints = computeLagrangePoints(s.state.pos, s.masses, s.G);
@@ -777,7 +851,6 @@ export function useThreeSimulation({
       if (spacetimeGridRef.current) spacetimeGridRef.current.visible = s.showSpacetime;
       if (axesHelperRef.current) axesHelperRef.current.visible = s.showAxes;
 
-      // Gravitational Field Views
       if (fieldLinesRef.current) fieldLinesRef.current.visible = s.fieldMode === 'lines';
       if (fieldVectorsRef.current) fieldVectorsRef.current.visible = s.fieldMode === 'vectors';
       if (fieldPotentialRef.current) fieldPotentialRef.current.visible = s.fieldMode === 'potential';
@@ -811,7 +884,6 @@ export function useThreeSimulation({
         posAttr.needsUpdate = true;
       }
 
-      // Sync Velocity-Gradient Orbital Trails
       if (s.trailsOn) {
         for (let i = 0; i < 3; i++) {
           const buf = trailBuffersRef.current[i];
@@ -830,7 +902,6 @@ export function useThreeSimulation({
         });
       }
 
-      // Sync Velocity Vectors
       if (s.showVectors) {
         for (let i = 0; i < 3; i++) {
           const arrow = arrowsRef.current[i];
@@ -853,7 +924,6 @@ export function useThreeSimulation({
         });
       }
 
-      // DOM projected labels
       if (s.showLabels && labelRefs?.current && celestialRendererRef.current) {
         for (let i = 0; i < 3; i++) {
           const el = labelRefs.current[i];
@@ -873,7 +943,6 @@ export function useThreeSimulation({
         });
       }
 
-      // Camera Tracking
       const cs = camStateRef.current;
       if (['body0', 'body1', 'body2'].includes(cs.mode)) {
         const idx = Number(cs.mode.slice(4));
@@ -911,7 +980,6 @@ export function useThreeSimulation({
 
       renderer.render(scene, camera);
 
-      // Throttled UI Updates
       uiAccum += frameDt;
       if (uiAccum > 0.1) {
         uiAccum = 0;
@@ -932,7 +1000,6 @@ export function useThreeSimulation({
         ]);
         const distInfo = computePairDistances(s.state);
 
-        // Spacetime Fabric Deformation
         if (s.showSpacetime && spacetimeGridRef.current) {
           const posArr = spacetimeGridRef.current.geometry.attributes.position.array;
           const colArr = spacetimeGridRef.current.geometry.attributes.color.array;
@@ -953,7 +1020,6 @@ export function useThreeSimulation({
           spacetimeGridRef.current.geometry.attributes.color.needsUpdate = true;
         }
 
-        // Field Grids
         if (
           (s.fieldMode === 'lines' && fieldLinesRef.current) ||
           (s.fieldMode === 'vectors' && fieldVectorsRef.current)
@@ -996,7 +1062,6 @@ export function useThreeSimulation({
           fieldPotentialRef.current.geometry.attributes.color.needsUpdate = true;
         }
 
-        // Chaos Lab Telemetry
         let chaosSep = 0;
         let chaosLyap = null;
         if (s.chaosOn && sysBRef.current) {
@@ -1007,7 +1072,6 @@ export function useThreeSimulation({
           }
         }
 
-        // Rolling history
         if (s.running && historyRef.current) {
           const H = historyRef.current;
           const accel = computeAccelerations(s.state.pos, s.masses, s.G);
@@ -1081,7 +1145,6 @@ export function useThreeSimulation({
         });
       }
 
-      // Throttled Chart Tick
       chartAccum += frameDt;
       if (chartAccum > 0.3) {
         chartAccum = 0;
