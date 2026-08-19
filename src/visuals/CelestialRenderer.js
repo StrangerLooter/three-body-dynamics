@@ -1,14 +1,13 @@
 import * as THREE from 'three';
 import { BODY_COLORS, BODY_HEX, BODY_TEXTURES, BODY_ROT_SPEED } from '../constants/bodies.js';
 import { createAtmosphereMesh } from './shaders/AtmosphereShader.js';
-import { createStarMesh } from './shaders/StarPlasmaShader.js';
 
 export class CelestialRenderer {
-  constructor(scene, initialRadii = [0.16, 0.16, 0.12]) {
+  constructor(scene, initialRadii = [0.16, 0.14, 0.11]) {
     this.scene = scene;
     this.bodyMeshes = [];
     this.atmosphereMeshes = [];
-    this.coronaMeshes = [];
+    this.glowMeshes = [];
     this.radii = initialRadii;
     this.clock = 0;
 
@@ -18,69 +17,69 @@ export class CelestialRenderer {
   initBodies() {
     const textureLoader = new THREE.TextureLoader();
 
-    // Body 0: Glowing Blue Plasma Star / Primary
-    const r0 = this.radii[0] || 0.16;
-    const mesh0 = createStarMesh(r0, 0x38bdf8, 0x0284c7);
-    this.scene.add(mesh0);
-    this.bodyMeshes.push(mesh0);
+    for (let i = 0; i < 3; i++) {
+      const radius = this.radii[i] || 0.15;
+      const geo = new THREE.SphereGeometry(radius, 48, 48);
 
-    const atmos0 = createAtmosphereMesh(r0, '#38bdf8', 0.9, 2.2);
-    this.scene.add(atmos0);
-    this.atmosphereMeshes.push(atmos0);
+      // Realistic planetary surface material with neon emissive accent
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: BODY_COLORS[i],
+        emissiveIntensity: 0.22,
+        roughness: 0.6,
+        metalness: 0.15,
+      });
 
-    // Body 1: Burning Orange Solar Corona Star / Secondary
-    const r1 = this.radii[1] || 0.16;
-    const mesh1 = createStarMesh(r1, 0xf97316, 0xef4444);
-    this.scene.add(mesh1);
-    this.bodyMeshes.push(mesh1);
+      // Load high-res planetary texture map
+      if (BODY_TEXTURES[i]) {
+        textureLoader.load(
+          BODY_TEXTURES[i],
+          (tex) => {
+            tex.colorSpace = THREE.SRGBColorSpace;
+            mat.map = tex;
+            mat.emissiveIntensity = 0.12;
+            mat.needsUpdate = true;
+          },
+          undefined,
+          () => {}
+        );
+      }
 
-    const atmos1 = createAtmosphereMesh(r1, '#f97316', 0.9, 2.2);
-    this.scene.add(atmos1);
-    this.atmosphereMeshes.push(atmos1);
+      const mesh = new THREE.Mesh(geo, mat);
+      this.scene.add(mesh);
+      this.bodyMeshes.push(mesh);
 
-    // Body 2: Photorealistic Terrestrial / Moon Planet / Tertiary
-    const r2 = this.radii[2] || 0.12;
-    const geo2 = new THREE.SphereGeometry(r2, 48, 48);
-    const mat2 = new THREE.MeshStandardMaterial({
-      color: 0xffffff,
-      emissive: BODY_COLORS[2],
-      emissiveIntensity: 0.12,
-      roughness: 0.75,
-      metalness: 0.1,
-    });
+      // 1. Neon Rayleigh Atmospheric Fresnel Glow Rim
+      const atmos = createAtmosphereMesh(radius, BODY_HEX[i], 0.95, 2.4);
+      this.scene.add(atmos);
+      this.atmosphereMeshes.push(atmos);
 
-    textureLoader.load(
-      BODY_TEXTURES[1] || BODY_TEXTURES[2],
-      (tex) => {
-        tex.colorSpace = THREE.SRGBColorSpace;
-        mat2.map = tex;
-        mat2.needsUpdate = true;
-      },
-      undefined,
-      () => {}
-    );
-
-    const mesh2 = new THREE.Mesh(geo2, mat2);
-    this.scene.add(mesh2);
-    this.bodyMeshes.push(mesh2);
-
-    const atmos2 = createAtmosphereMesh(r2, '#ffcf7a', 0.6, 2.8);
-    this.scene.add(atmos2);
-    this.atmosphereMeshes.push(atmos2);
-
-    // Subtle ambient glow halos for all 3 bodies
-    this.bodyMeshes.forEach((mesh, i) => {
-      const glowGeo = new THREE.SphereGeometry((this.radii[i] || 0.15) * 1.8, 24, 24);
+      // 2. High-intensity neon aura halo (Additive blending)
+      const glowGeo = new THREE.SphereGeometry(radius * 1.65, 32, 32);
       const glowMat = new THREE.MeshBasicMaterial({
         color: BODY_COLORS[i],
         transparent: true,
-        opacity: 0.14,
+        opacity: 0.2,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
+        side: THREE.BackSide,
       });
       const glow = new THREE.Mesh(glowGeo, glowMat);
       mesh.add(glow);
-    });
+      this.glowMeshes.push(glow);
+
+      // 3. Inner neon core glow
+      const innerGlowGeo = new THREE.SphereGeometry(radius * 1.15, 24, 24);
+      const innerGlowMat = new THREE.MeshBasicMaterial({
+        color: BODY_COLORS[i],
+        transparent: true,
+        opacity: 0.15,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+      const innerGlow = new THREE.Mesh(innerGlowGeo, innerGlowMat);
+      mesh.add(innerGlow);
+    }
   }
 
   update(frameDt, state, selectedIdx, showAtmosphere = true) {
@@ -95,13 +94,9 @@ export class CelestialRenderer {
         mesh.position.set(p[0], p[1], p[2]);
         mesh.rotation.y += BODY_ROT_SPEED[i] * frameDt;
 
-        // Update plasma shader time uniform for stars
-        if (mesh.material?.uniforms?.time) {
-          mesh.material.uniforms.time.value = this.clock;
-        }
-
         const isSel = selectedIdx === i;
         mesh.scale.setScalar(isSel ? 1.18 : 1.0);
+        mesh.material.emissiveIntensity = isSel ? 0.45 : mesh.material.map ? 0.12 : 0.22;
       }
 
       if (atmos) {
