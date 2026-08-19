@@ -43,7 +43,7 @@ vercel --prod
 - React 18 + Three.js (raw, no R3F)
 - Vite 5
 - Tailwind CSS (CDN)
-- Groq API (llama-3.3-70b-versatile)
+- Groq API (gpt OSS 120b)
 
 ## Physics
 - Newtonian gravity: `a_i = G Σ m_j (r_j - r_i) / |r_j - r_i|³`
