@@ -33,38 +33,25 @@ export function RightTelemetryPanel({
         open ? 'translate-x-0' : 'translate-x-full'
       }`}
     >
-      <div className="w-64 h-full overflow-y-auto bg-[#02050c]/90 backdrop-blur-md border-l border-white/10 p-3 space-y-4 text-xs text-slate-300 custom-scrollbar">
+      <div className="w-60 h-full overflow-y-auto bg-[#02050c]/65 hover:bg-[#02050c]/85 backdrop-blur-md border-l border-white/10 p-2.5 space-y-3 text-xs text-slate-300 custom-scrollbar transition-colors">
         {/* CONSERVATION TELEMETRY */}
-        <Section title="SYSTEM TELEMETRY">
+        <Section title="TELEMETRY" collapsible defaultOpen={true}>
           <Telemetry label="TOTAL ENERGY" value={fmt(energy.total)} />
-          <Telemetry label="KINETIC ENERGY" value={fmt(energy.KE)} color="text-cyan-300" />
-          <Telemetry label="POTENTIAL ENERGY" value={fmt(energy.PE)} color="text-violet-300" />
+          <Telemetry label="KINETIC" value={fmt(energy.KE)} color="text-cyan-300" />
+          <Telemetry label="POTENTIAL" value={fmt(energy.PE)} color="text-violet-300" />
           <Telemetry
-            label="ENERGY ERROR"
+            label="ERROR"
             value={energyError.toExponential(2)}
             color={energyError > 1e-3 ? 'text-amber-400' : 'text-slate-300'}
           />
           <Telemetry label="|P| MOMENTUM" value={fmt(momentumMag)} />
-          <Telemetry label="|L| ANGULAR MOM" value={fmt(angMomentumMag)} />
-          <Telemetry label="MIN SEPARATION" value={fmt(minDist, 3)} />
-          <Telemetry label="MAX SEPARATION" value={fmt(maxDist, 3)} />
-        </Section>
-
-        {/* CENTER OF MASS */}
-        <Section title="CENTER OF MASS">
-          <Row label="X">
-            <span className="text-slate-200 tabular-nums">{fmt(com[0], 4)}</span>
-          </Row>
-          <Row label="Y">
-            <span className="text-slate-200 tabular-nums">{fmt(com[1], 4)}</span>
-          </Row>
-          <Row label="Z">
-            <span className="text-slate-200 tabular-nums">{fmt(com[2], 4)}</span>
-          </Row>
+          <Telemetry label="|L| ANGULAR" value={fmt(angMomentumMag)} />
+          <Telemetry label="MIN SEP" value={fmt(minDist, 3)} />
+          <Telemetry label="MAX SEP" value={fmt(maxDist, 3)} />
         </Section>
 
         {/* PAIRWISE DISTANCES */}
-        <Section title="PAIRWISE DISTANCES">
+        <Section title="PAIRWISE DISTANCES" collapsible defaultOpen={true}>
           <Telemetry
             label={`${BODY_NAMES[0]} ↔ ${BODY_NAMES[1]}`}
             value={fmt(pairDist.d01, 3)}
@@ -83,13 +70,13 @@ export function RightTelemetryPanel({
         </Section>
 
         {/* BODY DATA */}
-        <Section title="BODY INSPECTOR">
-          <div className="flex gap-1 mb-2">
+        <Section title="BODY INSPECTOR" collapsible defaultOpen={true}>
+          <div className="flex gap-1 mb-1.5">
             {[0, 1, 2].map((i) => (
               <button
                 key={i}
                 onClick={() => onSelectBody(i)}
-                className={`flex-1 px-1 py-1 border text-[9px] tracking-wider transition-all ${
+                className={`flex-1 px-1 py-0.5 border text-[9px] tracking-wider transition-all ${
                   selected === i
                     ? 'border-white/50 bg-white/10 font-bold'
                     : 'border-white/10 text-slate-500 hover:text-slate-300'
@@ -104,19 +91,28 @@ export function RightTelemetryPanel({
           <Telemetry label="POS X" value={fmt(bodyData.pos[0], 3)} />
           <Telemetry label="POS Y" value={fmt(bodyData.pos[1], 3)} />
           <Telemetry label="POS Z" value={fmt(bodyData.pos[2], 3)} />
-          <Telemetry label="VEL X" value={fmt(bodyData.vel[0], 3)} />
-          <Telemetry label="VEL Y" value={fmt(bodyData.vel[1], 3)} />
-          <Telemetry label="VEL Z" value={fmt(bodyData.vel[2], 3)} />
           <Telemetry label="SPEED" value={fmt(bodyData.speed, 3)} color="text-cyan-300" />
-          <Telemetry label="DIST TO NEXT" value={fmt(bodyData.distNext, 3)} />
+        </Section>
+
+        {/* CENTER OF MASS */}
+        <Section title="CENTER OF MASS" collapsible defaultOpen={false}>
+          <Row label="X">
+            <span className="text-slate-200 tabular-nums">{fmt(com[0], 4)}</span>
+          </Row>
+          <Row label="Y">
+            <span className="text-slate-200 tabular-nums">{fmt(com[1], 4)}</span>
+          </Row>
+          <Row label="Z">
+            <span className="text-slate-200 tabular-nums">{fmt(com[2], 4)}</span>
+          </Row>
         </Section>
 
         {/* DIRECT COORDINATE EDITOR */}
-        <Section title="DIRECT COORDINATE EDIT">
-          <div className="flex gap-1 mb-2">
+        <Section title="COORDINATE EDITOR" collapsible defaultOpen={false}>
+          <div className="flex gap-1 mb-1.5">
             <button
               onClick={() => onSetEditMode('live')}
-              className={`flex-1 px-1.5 py-1 border text-[9px] tracking-wide transition-all ${
+              className={`flex-1 px-1 py-0.5 border text-[9px] tracking-wide transition-all ${
                 editMode === 'live'
                   ? 'border-cyan-400/70 text-cyan-200 bg-cyan-400/15 font-semibold'
                   : 'border-white/10 text-slate-500 hover:text-slate-300'
@@ -126,16 +122,16 @@ export function RightTelemetryPanel({
             </button>
             <button
               onClick={() => onSetEditMode('initial')}
-              className={`flex-1 px-1.5 py-1 border text-[9px] tracking-wide transition-all ${
+              className={`flex-1 px-1 py-0.5 border text-[9px] tracking-wide transition-all ${
                 editMode === 'initial'
                   ? 'border-violet-400/70 text-violet-200 bg-violet-400/15 font-semibold'
                   : 'border-white/10 text-slate-500 hover:text-slate-300'
               }`}
             >
-              INITIAL COND.
+              INITIAL
             </button>
           </div>
-          <div className="space-y-1 mb-2">
+          <div className="space-y-0.5 mb-1.5">
             <div className="text-[9px] text-slate-400">POS (X, Y, Z)</div>
             <div className="grid grid-cols-3 gap-1">
               <MiniInput
@@ -155,7 +151,7 @@ export function RightTelemetryPanel({
               />
             </div>
           </div>
-          <div className="space-y-1 mb-2">
+          <div className="space-y-0.5 mb-1.5">
             <div className="text-[9px] text-slate-400">VEL (VX, VY, VZ)</div>
             <div className="grid grid-cols-3 gap-1">
               <MiniInput
@@ -175,17 +171,13 @@ export function RightTelemetryPanel({
               />
             </div>
           </div>
-          <div className="flex gap-2">
-            <SmallBtn onClick={onApplyEditVals} className="flex-1 text-center">
+          <div className="flex gap-1.5">
+            <SmallBtn onClick={onApplyEditVals} className="flex-1 text-center py-1">
               APPLY
             </SmallBtn>
-            <SmallBtn onClick={onRevertEditVals} className="flex-1 text-center">
+            <SmallBtn onClick={onRevertEditVals} className="flex-1 text-center py-1">
               REVERT
             </SmallBtn>
-          </div>
-          <div className="text-[9px] text-slate-400 leading-tight mt-1">
-            Editing {editMode === 'initial' ? 'initial state (applies on Reset)' : 'live running state'}{' '}
-            for {BODY_NAMES[selected]}.
           </div>
         </Section>
       </div>

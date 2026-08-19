@@ -11,11 +11,13 @@ import {
 export const GROQ_STORAGE_KEY = 'groq_api_key';
 
 export function getStoredApiKey() {
+  const envKey = (import.meta.env.VITE_GROQ_API_KEY || '').trim();
+  if (envKey) return envKey;
   try {
     const fromStorage = window.localStorage.getItem(GROQ_STORAGE_KEY);
     if (fromStorage && fromStorage.trim()) return fromStorage.trim();
   } catch (e) {}
-  return import.meta.env.VITE_GROQ_API_KEY || '';
+  return '';
 }
 
 export function saveStoredApiKey(key) {
@@ -113,7 +115,7 @@ export async function callGroqChat({
 }) {
   const effectiveKey = apiKey || getStoredApiKey();
   if (!effectiveKey) {
-    throw new Error('Groq API Key is missing. Please set your API key in the settings or .env file.');
+    throw new Error('Groq API Key is missing. Please add VITE_GROQ_API_KEY in your .env or Vercel environment variables.');
   }
 
   const basePrompt = SYSTEM_PROMPTS[mode] || SYSTEM_PROMPTS.normal;
@@ -122,12 +124,12 @@ export async function callGroqChat({
   const temperature = mode === 'narrate' ? 0.6 : 0.25;
   const max_tokens = mode === 'narrate' ? 120 : 450;
 
+  // Build payload without invalid reasoning_effort parameters
   const body = {
     model,
     messages: [{ role: 'system', content: systemContent }, ...messages.slice(-10)],
     temperature,
     max_tokens,
-    reasoning_effort: 'default',
   };
 
   const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {

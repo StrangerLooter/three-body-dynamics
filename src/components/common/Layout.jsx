@@ -1,12 +1,24 @@
-import React from 'react';
+import React, { useState } from 'react';
 
-export function Section({ title, children, className = '' }) {
+export function Section({ title, children, className = '', collapsible = false, defaultOpen = true }) {
+  const [open, setOpen] = useState(defaultOpen);
+
   return (
     <div className={`space-y-1.5 ${className}`}>
-      <div className="text-[10px] tracking-[0.2em] text-slate-400 font-semibold mb-1.5 border-b border-white/10 pb-1 flex items-center justify-between">
+      <div
+        onClick={collapsible ? () => setOpen(!open) : undefined}
+        className={`text-[10px] tracking-[0.2em] text-slate-300 font-semibold mb-1 border-b border-white/10 pb-1 flex items-center justify-between select-none ${
+          collapsible ? 'cursor-pointer hover:text-cyan-300 transition-colors' : ''
+        }`}
+      >
         <span>{title}</span>
+        {collapsible && (
+          <span className="text-slate-400 text-[10px] transform transition-transform duration-200">
+            {open ? '▾' : '▸'}
+          </span>
+        )}
       </div>
-      <div className="space-y-1.5">{children}</div>
+      {(!collapsible || open) && <div className="space-y-1.5">{children}</div>}
     </div>
   );
 }
