@@ -39,7 +39,7 @@ export class CelestialRenderer {
       group.add(hitMesh);
       this.bodyMeshes.push(hitMesh);
 
-      // 2. High-performance Fallback Sphere (only visible during loading)
+      // 2. High-performance Fallback Sphere (visible during loading)
       const fallbackGeo = new THREE.SphereGeometry(radius, 32, 32);
       const fallbackMat = new THREE.MeshStandardMaterial({
         color: BODY_COLORS[i],
@@ -49,13 +49,13 @@ export class CelestialRenderer {
       const fallbackMesh = new THREE.Mesh(fallbackGeo, fallbackMat);
       group.add(fallbackMesh);
 
-      // 3. Crisp, Realistic 3D Model Loading
+      // 3. Crisp, Realistic 3D Model Loading (Supports local /public path or external CDN embed URL)
       const modelPath = BODY_MODELS[i];
       if (modelPath) {
         gltfLoader.load(
           modelPath,
           (gltf) => {
-            // Remove loading placeholder
+            // Remove loading placeholder cleanly
             group.remove(fallbackMesh);
             fallbackGeo.dispose();
             fallbackMat.dispose();
@@ -87,7 +87,7 @@ export class CelestialRenderer {
             group.add(pivot);
             this.modelPivots[i] = pivot;
 
-            // Traverse and preserve pure photorealistic textures
+            // Traverse and preserve pure photorealistic textures and cloud layers
             model.traverse((child) => {
               if (child.isMesh) {
                 child.castShadow = true;
@@ -95,27 +95,36 @@ export class CelestialRenderer {
                 child.userData = { bodyIndex: i };
 
                 if (child.material) {
-                  // Ensure correct SRGB color space for authentic textures
-                  if (child.material.map) {
-                    child.material.map.colorSpace = THREE.SRGBColorSpace;
-                  }
+                  const mats = Array.isArray(child.material)
+                    ? child.material
+                    : [child.material];
 
-                  // Clear any artificial neon emissive overrides
-                  if (i === 0) {
-                    // Sun: Natural solar luminance using its own texture map
-                    if (child.material.map) {
-                      child.material.emissiveMap = child.material.map;
-                      child.material.emissive = new THREE.Color(0xffffff);
-                      child.material.emissiveIntensity = 0.9;
+                  mats.forEach((mat) => {
+                    if (!mat) return;
+                    // Ensure correct SRGB color space for authentic textures
+                    if (mat.map) {
+                      mat.map.colorSpace = THREE.SRGBColorSpace;
                     }
-                  } else {
-                    // Earth & Mars: Pure natural PBR planetary surface
-                    child.material.emissive = new THREE.Color(0x000000);
-                    child.material.emissiveIntensity = 0;
-                    child.material.roughness = 0.65;
-                    child.material.metalness = 0.05;
-                  }
-                  child.material.needsUpdate = true;
+
+                    if (i === 0) {
+                      // Sun: Natural solar luminance using its own texture map
+                      if (mat.map) {
+                        mat.emissiveMap = mat.map;
+                        mat.emissive = new THREE.Color(0xffffff);
+                        mat.emissiveIntensity = 0.9;
+                      }
+                    } else {
+                      // Earth & Mars: Pure natural PBR planetary surface
+                      if (mat.transparent || mat.opacity < 1) {
+                        mat.depthWrite = false;
+                      }
+                      mat.emissive = new THREE.Color(0x000000);
+                      mat.emissiveIntensity = 0;
+                      mat.roughness = 0.65;
+                      mat.metalness = 0.05;
+                    }
+                    mat.needsUpdate = true;
+                  });
                 }
               }
             });

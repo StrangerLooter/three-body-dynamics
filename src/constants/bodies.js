@@ -2,10 +2,10 @@ export const BODY_COLORS = [0xffbe40, 0x48c0ff, 0xff5733]; // Sun (Amber), Earth
 export const BODY_HEX = ['#ffbe40', '#48c0ff', '#ff5733'];
 export const BODY_NAMES = ['BODY 01 (Sun)', 'BODY 02 (Earth)', 'BODY 03 (Mars)'];
 
-// 3D GLTF / GLB Models in public/models/
+// 3D GLTF / GLB Models in public/models/ or CDN URLs
 export const BODY_MODELS = [
   '/models/sun_with_2k_textures.glb',
-  '/models/earth_3d_model.glb',
+  '/models/earth_-_16k_high_resolution.glb',
   '/models/mars.glb',
 ];
 
