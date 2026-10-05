@@ -11,6 +11,7 @@ import {
   computeSeparation,
   computeFieldAt,
   computePotentialAt,
+  computePotentialAtCoords,
   computeAccelerations,
   computeLagrangePoints,
   minPairDistance,
@@ -497,28 +498,38 @@ export function useThreeSimulation({
     }
 
     function pushTrailSample() {
+      const s = simRef.current;
+      if (!s.trailsOn) return;
       for (let i = 0; i < 3; i++) {
         const buf = trailBuffersRef.current[i];
         if (!buf) continue;
-        const idx = (buf.count % TRAIL_LENGTH) * 3;
-        const pos = sim.state.pos[i];
-        const vel = sim.state.vel[i];
-        const speed = vLen(vel);
+        const pos = s.state.pos[i];
 
-        buf.pos[idx] = pos[0];
-        buf.pos[idx + 1] = pos[1];
-        buf.pos[idx + 2] = pos[2];
+        // Avoid adding duplicate samples if the body hasn't moved
+        if (buf.count > 0) {
+          const lastIdx = Math.min(buf.count - 1, TRAIL_LENGTH - 1) * 3;
+          const dx = pos[0] - buf.pos[lastIdx];
+          const dy = pos[1] - buf.pos[lastIdx + 1];
+          const dz = pos[2] - buf.pos[lastIdx + 2];
+          if (dx * dx + dy * dy + dz * dz < 0.000004) {
+            continue;
+          }
+        }
 
-        const speedRatio = Math.min(1.0, speed / 2.5);
-        const baseColor = new THREE.Color(BODY_HEX[i]);
-        const hotColor = new THREE.Color(0xffffff);
-        const finalColor = baseColor.clone().lerp(hotColor, speedRatio * 0.75);
-
-        buf.cols[idx] = finalColor.r;
-        buf.cols[idx + 1] = finalColor.g;
-        buf.cols[idx + 2] = finalColor.b;
-
-        buf.count++;
+        if (buf.count < TRAIL_LENGTH) {
+          const idx = buf.count * 3;
+          buf.pos[idx] = pos[0];
+          buf.pos[idx + 1] = pos[1];
+          buf.pos[idx + 2] = pos[2];
+          buf.count++;
+        } else {
+          // Native TypedArray memory shift to keep points contiguous and ordered
+          buf.pos.copyWithin(0, 3);
+          const lastIdx = (TRAIL_LENGTH - 1) * 3;
+          buf.pos[lastIdx] = pos[0];
+          buf.pos[lastIdx + 1] = pos[1];
+          buf.pos[lastIdx + 2] = pos[2];
+        }
       }
     }
 
@@ -636,6 +647,7 @@ export function useThreeSimulation({
     let uiAccum = 0;
     let frameAccum = 0;
     let frameCount = 0;
+    let totalFrames = 0;
     let fps = 60;
     let chartAccum = 0;
 
@@ -644,6 +656,7 @@ export function useThreeSimulation({
       const frameDt = Math.min((now - lastFrameT) / 1000, 0.05);
       lastFrameT = now;
       frameCount++;
+      totalFrames++;
       frameAccum += frameDt;
       if (frameAccum >= 0.5) {
         fps = frameCount / frameAccum;
@@ -735,12 +748,34 @@ export function useThreeSimulation({
           if (distInfo.pairs.d02 === minD) pairNames = `${BODY_NAMES[0]} and ${BODY_NAMES[2]}`;
           if (distInfo.pairs.d12 === minD) pairNames = `${BODY_NAMES[1]} and ${BODY_NAMES[2]}`;
 
+          let iA = 0, iB = 1;
+          if (distInfo.pairs.d02 === minD) { iA = 0; iB = 2; }
+          else if (distInfo.pairs.d12 === minD) { iA = 1; iB = 2; }
+
+          // Compute screen projection of encounter midpoint for dynamic HUD avoidance
+          let screenX = 0.5;
+          let screenY = 0.5;
+          if (cameraRef.current) {
+            const pA = s.state.pos[iA];
+            const pB = s.state.pos[iB];
+            const midPoint = new THREE.Vector3(
+              (pA[0] + pB[0]) * 0.5,
+              (pA[1] + pB[1]) * 0.5,
+              (pA[2] + pB[2]) * 0.5
+            );
+            midPoint.project(cameraRef.current);
+            screenX = Math.max(0.05, Math.min(0.95, midPoint.x * 0.5 + 0.5));
+            screenY = Math.max(0.05, Math.min(0.95, -midPoint.y * 0.5 + 0.5));
+          }
+
           audio.playWarningAlarm(level);
           onWarningAlert?.({
             level,
             title,
             bodies: pairNames,
             description: desc,
+            screenX,
+            screenY,
           });
         }
 
@@ -893,12 +928,27 @@ export function useThreeSimulation({
         for (let i = 0; i < 3; i++) {
           const buf = trailBuffersRef.current[i];
           const line = trailLinesRef.current[i];
-          if (line && buf) {
+          if (line && buf && buf.count > 1) {
             line.visible = true;
             const n = Math.min(buf.count, TRAIL_LENGTH);
+            const baseColor = new THREE.Color(BODY_HEX[i]);
+
+            // Independent color gradient for each body:
+            // Point 0 is oldest (faint tail), Point n-1 is newest (bright glowing head)
+            for (let k = 0; k < n; k++) {
+              const progress = (k + 1) / n;
+              const intensity = 0.15 + 0.85 * Math.pow(progress, 1.25);
+              const cIdx = k * 3;
+              buf.cols[cIdx] = baseColor.r * intensity;
+              buf.cols[cIdx + 1] = baseColor.g * intensity;
+              buf.cols[cIdx + 2] = baseColor.b * intensity;
+            }
+
             line.geometry.attributes.position.needsUpdate = true;
             line.geometry.attributes.color.needsUpdate = true;
             line.geometry.setDrawRange(0, n);
+          } else if (line) {
+            line.visible = false;
           }
         }
       } else {
@@ -1005,14 +1055,14 @@ export function useThreeSimulation({
         ]);
         const distInfo = computePairDistances(s.state);
 
-        if (s.showSpacetime && spacetimeGridRef.current) {
+        if (s.showSpacetime && spacetimeGridRef.current && totalFrames % 2 === 0) {
           const posArr = spacetimeGridRef.current.geometry.attributes.position.array;
           const colArr = spacetimeGridRef.current.geometry.attributes.color.array;
 
           for (let i = 0; i < ST_N * ST_N; i++) {
             const x = posArr[i * 3];
             const z = posArr[i * 3 + 2];
-            const u = computePotentialAt([x, ST_BASE_Y, z], s.state.pos, s.masses, s.G);
+            const u = computePotentialAtCoords(x, ST_BASE_Y, z, s.state.pos, s.masses, s.G);
             const depth = Math.max(-1.8, u * 0.55);
             posArr[i * 3 + 1] = ST_BASE_Y + depth;
 

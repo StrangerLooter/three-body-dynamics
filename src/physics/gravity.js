@@ -56,3 +56,20 @@ export function computePotentialAt(point, positions, masses, G = 1) {
   }
   return u;
 }
+
+/**
+ * Fast zero-allocation gravitational potential computation for scalar coordinates (px, py, pz).
+ * Eliminates garbage collection pressure on high-vertex meshes (e.g. spacetime fabric).
+ */
+export function computePotentialAtCoords(px, py, pz, positions, masses, G = 1) {
+  let u = 0;
+  for (let j = 0; j < positions.length; j++) {
+    const pj = positions[j];
+    const dx = pj[0] - px;
+    const dy = pj[1] - py;
+    const dz = pj[2] - pz;
+    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz + SOFTENING);
+    u -= (G * masses[j]) / dist;
+  }
+  return u;
+}

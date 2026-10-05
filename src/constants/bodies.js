@@ -17,4 +17,4 @@ export const BODY_TEXTURES = [
 ];
 
 export const BODY_ROT_SPEED = [0.05, 0.14, 0.11]; // rad/s, self-rotation
-export const TRAIL_LENGTH = 600;
+export const TRAIL_LENGTH = 1200;

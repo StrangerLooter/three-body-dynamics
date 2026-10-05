@@ -48,6 +48,7 @@ export function LeftControlPanel({
   onSetCamMode,
   onResetCamera,
   onToggleVisualFlag,
+  onClearTrails,
   onToggleAudio,
   onSetFieldMode,
   onLoadPreset,
@@ -104,8 +105,42 @@ export function LeftControlPanel({
               Warped 3D mesh colored by potential depth & strain.
             </div>
           )}
-          <ToggleRow label="ATMOSPHERE GLOW" value={showAtmosphere} onChange={() => onToggleVisualFlag('showAtmosphere')} />
-          <ToggleRow label="TRAILS (T)" value={trailsOn} onChange={() => onToggleVisualFlag('trailsOn')} />
+          <ToggleRow
+            label="TRAJECTORY TRAILS (T)"
+            value={trailsOn}
+            onChange={() => onToggleVisualFlag('trailsOn')}
+          />
+          {trailsOn && (
+            <div className="bg-black/50 border border-cyan-500/20 rounded p-1.5 my-1 font-mono text-[9px]">
+              <div className="flex items-center justify-between text-slate-300 mb-1">
+                <span className="text-[8px] text-cyan-300/90 font-semibold tracking-wider">3D HISTORICAL PATHS</span>
+                {onClearTrails && (
+                  <button
+                    onClick={onClearTrails}
+                    type="button"
+                    title="Reset recorded historical path points"
+                    className="text-[8px] px-1.5 py-0.5 border border-white/20 hover:border-cyan-400 text-slate-400 hover:text-cyan-200 rounded transition-colors cursor-pointer"
+                  >
+                    CLEAR
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-1 text-[8px] font-medium tracking-wide">
+                <span className="flex items-center gap-1 text-[#ffbe40]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#ffbe40] inline-block shadow-[0_0_5px_#ffbe40]" />
+                  BODY 1
+                </span>
+                <span className="flex items-center gap-1 text-[#48c0ff]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#48c0ff] inline-block shadow-[0_0_5px_#48c0ff]" />
+                  BODY 2
+                </span>
+                <span className="flex items-center gap-1 text-[#ff5733]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#ff5733] inline-block shadow-[0_0_5px_#ff5733]" />
+                  BODY 3
+                </span>
+              </div>
+            </div>
+          )}
           <ToggleRow
             label="VECTORS (V)"
             value={showVectors}

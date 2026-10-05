@@ -11,6 +11,7 @@ import {
   BODY_HEX,
   BODY_NAMES,
   CAMERA_MODES,
+  TRAIL_LENGTH,
   makeEmptyHistory,
 } from './constants/index.js';
 import {
@@ -186,6 +187,8 @@ export default function App() {
       timestamp,
       duration: alertData.level === 'CRITICAL' ? 6 : 8,
       slotIndex,
+      screenX: alertData.screenX !== undefined ? alertData.screenX : 0.5,
+      screenY: alertData.screenY !== undefined ? alertData.screenY : 0.5,
     };
 
     setWarnings((prev) => {
@@ -298,20 +301,39 @@ export default function App() {
     }));
   }, [trailBuffersRef, trailLinesRef]);
 
+  const clearTrails = useCallback(() => {
+    audio.playUiBeep(480, 0.04);
+    if (trailBuffersRef.current) {
+      trailBuffersRef.current.forEach((b) => (b.count = 0));
+    }
+    if (trailLinesRef.current) {
+      trailLinesRef.current.forEach((l) => l?.geometry?.setDrawRange(0, 0));
+    }
+  }, [trailBuffersRef, trailLinesRef]);
+
   const stepOnce = useCallback(() => {
     audio.playUiBeep(560, 0.03);
     const s = simRef.current;
     s.state = integrateStep(s.state, s.masses, s.G, s.dt, s.integrator);
     s.simTime += s.dt;
-    if (trailBuffersRef.current) {
+    if (trailBuffersRef.current && s.trailsOn) {
       for (let i = 0; i < 3; i++) {
         const buf = trailBuffersRef.current[i];
         if (buf) {
-          const idx = (buf.count % 600) * 3;
-          buf.pos[idx] = s.state.pos[i][0];
-          buf.pos[idx + 1] = s.state.pos[i][1];
-          buf.pos[idx + 2] = s.state.pos[i][2];
-          buf.count++;
+          const pos = s.state.pos[i];
+          if (buf.count < TRAIL_LENGTH) {
+            const idx = buf.count * 3;
+            buf.pos[idx] = pos[0];
+            buf.pos[idx + 1] = pos[1];
+            buf.pos[idx + 2] = pos[2];
+            buf.count++;
+          } else {
+            buf.pos.copyWithin(0, 3);
+            const lastIdx = (TRAIL_LENGTH - 1) * 3;
+            buf.pos[lastIdx] = pos[0];
+            buf.pos[lastIdx + 1] = pos[1];
+            buf.pos[lastIdx + 2] = pos[2];
+          }
         }
       }
     }
@@ -813,6 +835,7 @@ export default function App() {
         onSetCamMode={setCamMode}
         onResetCamera={resetCamera}
         onToggleVisualFlag={toggleFlag}
+        onClearTrails={clearTrails}
         onToggleAudio={toggleAudio}
         onSetFieldMode={setFieldMode}
         onLoadPreset={loadPreset}

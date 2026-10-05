@@ -79,7 +79,7 @@ export function buildSimSnapshot(sim, sysB = null) {
 }
 
 const TEAM_LINE =
-  'Project team: Ram, Abhishek, and Mukul. If asked who built/developed this or who the team is, answer exactly: Ram, Abhishek, and Mukul. Do not invent roles or additional members.';
+  'Project team: Ram Vishwakarma, Parth Thakur, Lucky Thorat, and Prabhas Kasanya. If asked who built/developed this or who the team is, answer exactly: Ram Vishwakarma, Parth Thakur, Lucky Thorat, and Prabhas Kasanya. Do not invent roles or additional members.';
 
 const FORMAT_RULES =
   'Response rules: Be concise and scientifically accurate. Aim for 3-6 sentences for most answers. Use plain-text math notation (^, sqrt(), *). Do NOT output <think>, internal reasoning, or chain-of-thought — only the final answer. Structure answers clearly with short paragraphs if needed. Target audience: college physics students.';
