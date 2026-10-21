@@ -6,6 +6,26 @@ import {
   BODY_ROT_SPEED,
 } from '../constants/bodies.js';
 
+const sharedGLTFLoader = new GLTFLoader();
+const gltfModelCache = new Map();
+
+function getCachedGLTF(modelPath) {
+  if (!gltfModelCache.has(modelPath)) {
+    gltfModelCache.set(
+      modelPath,
+      new Promise((resolve, reject) => {
+        sharedGLTFLoader.load(
+          modelPath,
+          (gltf) => resolve(gltf),
+          undefined,
+          (err) => reject(err)
+        );
+      })
+    );
+  }
+  return gltfModelCache.get(modelPath);
+}
+
 export class CelestialRenderer {
   constructor(scene, initialRadii = [0.18, 0.14, 0.12]) {
     this.scene = scene;
@@ -20,8 +40,6 @@ export class CelestialRenderer {
   }
 
   initBodies() {
-    const gltfLoader = new GLTFLoader();
-
     for (let i = 0; i < 3; i++) {
       const radius = this.radii[i] || 0.15;
       const group = new THREE.Group();
@@ -52,10 +70,9 @@ export class CelestialRenderer {
       // 3. Crisp, Realistic 3D Model Loading (Supports local /public path or external CDN embed URL)
       const modelPath = BODY_MODELS[i];
       if (modelPath) {
-        gltfLoader.load(
-          modelPath,
-          (gltf) => {
-            // Remove loading placeholder cleanly
+        getCachedGLTF(modelPath)
+          .then((gltf) => {
+            if (!group.parent) return;
             group.remove(fallbackMesh);
             fallbackGeo.dispose();
             fallbackMat.dispose();
@@ -137,12 +154,10 @@ export class CelestialRenderer {
                 }
               }
             });
-          },
-          undefined,
-          (err) => {
+          })
+          .catch((err) => {
             console.warn(`Could not load GLB model from ${modelPath}:`, err);
-          }
-        );
+          });
       }
 
       // 4. Subtle, Sci-Fi Target Selection Ring (only visible when selected)

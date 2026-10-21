@@ -7,9 +7,16 @@ import { vSub, vDot } from './vectorMath.js';
 export function computeSeparation(stateA, stateB) {
   if (!stateA || !stateB || !stateA.pos || !stateB.pos) return 0;
   let sumSq = 0;
-  for (let i = 0; i < stateA.pos.length; i++) {
-    const d = vSub(stateA.pos[i], stateB.pos[i]);
-    sumSq += vDot(d, d);
+  const posA = stateA.pos;
+  const posB = stateB.pos;
+  const len = Math.min(posA.length, posB.length);
+  for (let i = 0; i < len; i++) {
+    const pA = posA[i];
+    const pB = posB[i];
+    const dx = pA[0] - pB[0];
+    const dy = pA[1] - pB[1];
+    const dz = pA[2] - pB[2];
+    sumSq += dx * dx + dy * dy + dz * dz;
   }
   return Math.sqrt(sumSq);
 }
