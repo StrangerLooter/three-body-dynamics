@@ -140,7 +140,7 @@ export class CelestialRenderer {
                         mat.emissiveIntensity = 0.85;
                       }
                     } else {
-                      // Earth & Mars: Pure natural PBR planetary surface
+                      // Jupiter & Mars: Pure natural PBR planetary surface
                       if (mat.transparent || mat.opacity < 1) {
                         mat.depthWrite = false;
                       }

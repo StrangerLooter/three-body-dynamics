@@ -132,7 +132,7 @@ def optimize_glb(input_path, output_path, max_dim=1024, jpeg_quality=84):
 
 if __name__ == '__main__':
     models = [
-        'public/models/earth_-_16k_high_resolution.glb',
+        'public/models/realistic_jupiter.glb',
         'public/models/mars.glb',
         'public/models/sun.glb'
     ]

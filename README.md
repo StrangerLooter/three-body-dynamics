@@ -2,32 +2,37 @@
 
 **An observatory-grade 3D numerical simulation & chaos laboratory for the classical Three-Body Problem**
 
-Built by **Ram Vishwakarma, Parth Thakur, Lucky Thorat, and Prabhas Kasanya** — B.Sc. Physics (Hons.), IEHE Bhopal | College Model Competition Project 2026
+Built by **Ram Vishwakarma, Parth Thakur, Lucky Thorat, and Prabhas Kasanya**  
+*Department of Physics, Institute for Excellence in Higher Education (IEHE), Bhopal | College Model Competition Project 2026*
 
-🌐 **Live Demo:** [https://three-body-dynamics.vercel.app](https://three-body-dynamics.vercel.app)  
-📁 **Repository:** [https://github.com/StrangerLooter/three-body-dynamics](https://github.com/StrangerLooter/three-body-dynamics)
+🌐 **Live Production:** [https://three-body-dynamics.vercel.app](https://three-body-dynamics.vercel.app)  
+📁 **GitHub Repository:** [https://github.com/StrangerLooter/three-body-dynamics](https://github.com/StrangerLooter/three-body-dynamics)
 
 ---
 
 ## 🌌 Overview
 
-**Three-Body Dynamics** is a real-time, interactive, GPU-accelerated numerical simulator and physics laboratory. Built using Three.js and React 18, it couples high-accuracy numerical integrators (RK4, Velocity Verlet, Euler) with atmospheric Rayleigh scattering shaders, dynamic spacetime fabric curvature, Lagrange equilibrium solvers ($L_1–L_5$), procedural gravitational wave audio sonification, collision warning systems, and an AI physics tutor.
+**Three-Body Dynamics** is a real-time, interactive, GPU-accelerated numerical simulator and astrophysics laboratory exploring Henri Poincaré's celebrated non-linear three-body problem. Powered by Three.js and React 18, the simulator couples high-precision numerical integrators (Runge-Kutta 4th Order, Symplectic Velocity Verlet, and Euler) with photorealistic 3D celestial rendering, dynamic spacetime curvature visualization, Lagrange equilibrium solvers ($L_1–L_5$), real-time Lyapunov exponent chaos estimation, Web Audio gravitational sonification, and a Groq-powered AI physics tutor.
+
+Designed for physics students, educators, and astronomy enthusiasts, the simulation enables deep mathematical exploration of orbital resonances, deterministic chaos, and conservation laws in an intuitive, observatory-grade interface.
 
 ---
 
 ## 🚀 Key Features
 
-| Domain | Features |
+| Domain | Detailed Description |
 |---|---|
-| **Photorealistic Visuals** | Atmospheric Rayleigh Fresnel glow shaders, 3D GLB celestial models (Sun, Earth, Mars), multi-temperature starfield, and cosmic dust nebulae. |
-| **Trajectory Trails** | Real-time continuous 3D historical path tracking with independent color coding (Sun: Amber, Earth: Cyan, Mars: Coral-Red), smooth tail-to-head gradient, and zero-jump memory management. |
+| **Photorealistic Visuals** | Ultra-optimized 3D GLB celestial models (**Sun**, **Jupiter**, **Mars**) featuring authentic PBR textures, atmospheric Fresnel glow shaders, and an astronomical pure white deep-space starfield. |
+| **High-Contrast Celestial Models** | Swapped dark-space planetary bodies with a radiant, banded gas giant (**Jupiter** at $R = 0.17$), ensuring vibrant visibility against the deep cosmos without lighting occlusion. |
+| **Trajectory Trails** | Real-time continuous 3D historical path tracking with independent color coding (Sun: Solar Amber `#ffbe40`, Jupiter: Banded Ochre `#e2b078`, Mars: Coral-Red `#ff5733`), smooth tail-to-head gradient, and zero-jump memory management. |
+| **Ultra-Fast 3D Asset Loading** | All GLB models compressed by **~94%** down to a total payload of **~2.18 MB** across all bodies, loaded via parallel browser preloading and cached permanently with immutable HTTP headers. |
 | **Dynamic Collision Warning HUD** | Real-time close encounter & collision alerts featuring screen-space occlusion avoidance, draggable positioning, and compact minimization mode so orbits remain visible. |
-| **Physics Engine** | 4th-Order Runge-Kutta (RK4), symplectic Velocity Verlet, and Euler integrators with step-doubling adaptive time-stepping and Plummer singularity softening. |
+| **Physics Engine** | 4th-Order Runge-Kutta (RK4), symplectic Velocity Verlet, and Euler integrators with step-doubling adaptive time-stepping, pairwise symmetric force evaluation, and Plummer singularity softening. |
 | **Lagrange Equilibrium** | Real-time numerical calculation and 3D visualization of the 5 Lagrange equilibrium points ($L_1, L_2, L_3, L_4, L_5$). |
-| **Spacetime Mesh** | 3D tension-colored fabric mesh dynamically warped according to the exact gravitational potential well $U(r)$ with zero-allocation math routines. |
+| **Spacetime Mesh** | 3D tension-colored fabric mesh dynamically warped according to the exact gravitational potential well $U(\vec{r})$ with zero-allocation math routines. |
 | **Chaos Lab** | Real-time twin system perturbation ($A/B$), phase-space divergence tracking, and numerical Lyapunov exponent ($\lambda$) estimation. |
 | **Gravitational Field** | Directional field lines, magnitude-encoded vector fields, potential well heatmap contours, and tracer particle flow. |
-| **Gravitational Audio** | Procedural Web Audio API sonification of orbital acceleration, gravitational wave chirps on close approach, and deep-space drone. |
+| **Gravitational Audio** | Procedural Web Audio API sonification of orbital acceleration, gravitational wave chirps on close approach, and deep-space cosmic drone. |
 | **Phase Space Analysis** | 2D $(x, v_x)$ state-space attractor trajectories, energy/momentum conservation charts, and CSV/JSON data export. |
 | **AI Physics Tutor** | Groq-powered assistant with live telemetry awareness, TTS voice narration, physics quizzes, and judge mode. |
 | **Camera & Control** | 9 camera modes (Free Orbit, Follow Body 1–3, Follow COM, Orthographic Top/Front/Side, Auto Orbit), full hotkey suite. |
@@ -36,51 +41,87 @@ Built by **Ram Vishwakarma, Parth Thakur, Lucky Thorat, and Prabhas Kasanya** �
 
 ## 🔬 Mathematical & Physical Foundations
 
-### 1. Newton's Law of Universal Gravitation (Softened)
-Gravitational acceleration on body $i$ due to all bodies $j \neq i$:
+### 1. Newton's Law of Mutual Gravitation (Pairwise Symmetric)
+The gravitational acceleration experienced by body $i$ due to all bodies $j \neq i$:
 $$\vec{a}_i = G \sum_{j \neq i} \frac{m_j (\vec{r}_j - \vec{r}_i)}{(|\vec{r}_j - \vec{r}_i|^2 + \epsilon^2)^{3/2}}$$
-*Where $\epsilon = 0.05$ is the softening parameter preventing numerical infinities during near-zero periapsis passages.*
 
-### 2. Conservation Laws (Monitored in Real Time)
-- **Total Energy:**
-  $$E = K + U = \frac{1}{2}\sum_{i=1}^3 m_i |\vec{v}_i|^2 - G \sum_{1 \le i < j \le 3} \frac{m_i m_j}{|\vec{r}_j - \vec{r}_i|}$$
+To optimize computational throughput, the simulation implements Newton's Third Law ($\vec{F}_{ij} = -\vec{F}_{ji}$), reducing pairwise distance calculations from $N(N-1)$ to $\frac{N(N-1)}{2}$ (3 pairs instead of 6 evaluations per step).
+
+*Where $\epsilon = 0.05$ is the Plummer softening parameter preventing mathematical infinities during near-zero periapsis passages.*
+
+### 2. Numerical Integration Schemes
+
+#### A. 4th-Order Runge-Kutta (RK4)
+RK4 computes four intermediate slopes per time step to deliver a local truncation error of $\mathcal{O}(\Delta t^5)$ and global error of $\mathcal{O}(\Delta t^4)$:
+$$\begin{aligned}
+\vec{k}_1 &= f(t_n, \vec{y}_n) \\
+\vec{k}_2 &= f\left(t_n + \frac{\Delta t}{2}, \vec{y}_n + \frac{\Delta t}{2}\vec{k}_1\right) \\
+\vec{k}_3 &= f\left(t_n + \frac{\Delta t}{2}, \vec{y}_n + \frac{\Delta t}{2}\vec{k}_2\right) \\
+\vec{k}_4 &= f(t_n + \Delta t, \vec{y}_n + \Delta t\,\vec{k}_3) \\
+\vec{y}_{n+1} &= \vec{y}_n + \frac{\Delta t}{6} (\vec{k}_1 + 2\vec{k}_2 + 2\vec{k}_3 + \vec{k}_4)
+\end{aligned}$$
+
+#### B. Symplectic Velocity Verlet
+Essential for long-term orbital simulations because it is time-reversible and preserves phase-space volume (symplectic property):
+$$\begin{aligned}
+\vec{r}_{n+1} &= \vec{r}_n + \vec{v}_n \Delta t + \frac{1}{2} \vec{a}_n \Delta t^2 \\
+\vec{a}_{n+1} &= \vec{a}(\vec{r}_{n+1}) \\
+\vec{v}_{n+1} &= \vec{v}_n + \frac{1}{2} (\vec{a}_n + \vec{a}_{n+1}) \Delta t
+\end{aligned}$$
+
+### 3. Conservation Laws (Monitored in Real Time)
+- **Total Mechanical Energy:**
+  $$E = K + U = \frac{1}{2}\sum_{i=1}^3 m_i |\vec{v}_i|^2 - G \sum_{1 \le i < j \le 3} \frac{m_i m_j}{\sqrt{|\vec{r}_j - \vec{r}_i|^2 + \epsilon^2}}$$
 - **Linear Momentum:**
   $$\vec{P} = \sum_{i=1}^3 m_i \vec{v}_i = \text{const}$$
-- **Angular Momentum:**
+- **Total Angular Momentum:**
   $$\vec{L} = \sum_{i=1}^3 (\vec{r}_i \times m_i \vec{v}_i) = \text{const}$$
 
-### 3. Numerical Integrators
-- **Runge-Kutta 4th Order (RK4):** Fourth-order accurate local truncation error $\mathcal{O}(\Delta t^5)$, global error $\mathcal{O}(\Delta t^4)$.
-- **Velocity Verlet:** Second-order symplectic integrator that conserves phase space volume and long-term energy stability.
-- **Euler Method:** Simple first-order integrator $\mathcal{O}(\Delta t)$ for comparative educational demonstrations.
-
-### 4. Chaos Theory & Lyapunov Exponent
-The sensitive dependence on initial conditions is quantified in real time by simulating an identical perturbed system $B$ alongside system $A$ with separation $\delta_0 = 10^{-5}$:
-$$\lambda = \lim_{t \to \infty} \frac{1}{t} \ln \left( \frac{|\Delta \vec{r}(t)|}{|\Delta \vec{r}(0)|} \right)$$
-A positive Lyapunov exponent ($\lambda > 0$) signifies deterministic chaos.
+### 4. Deterministic Chaos & Lyapunov Exponent ($\lambda$)
+In the Chaos Lab, an identical perturbed twin system $B$ is evolved synchronously with state separation $\delta_0 = 10^{-6}$:
+$$\lambda \approx \frac{1}{t - t_0} \ln\left( \frac{\|\Delta \vec{r}(t)\|}{\|\Delta \vec{r}(0)\|} \right)$$
+A strictly positive Lyapunov exponent ($\lambda > 0$) demonstrates the exponential divergence of trajectories characteristic of deterministic chaos.
 
 ---
 
-## ⚡ Performance Optimizations
+## ⚡ Performance & Asset Architecture
 
-1. **Zero-Allocation Physics Math:** High-vertex evaluations (such as the $28 \times 28$ spacetime fabric grid) utilize `computePotentialAtCoords(x, y, z)` to eliminate thousands of object allocations per frame.
-2. **Ordered FIFO Trajectory Buffers:** Trajectories use TypedArray `copyWithin(0, 3)` to shift 1,200 points in-place, eliminating memory churn and visual jump seams.
-3. **Adaptive Update Throttling:**
-   - 3D Celestial rendering & orbits: native monitor refresh rate (60–144 Hz).
-   - Spacetime fabric mesh: throttled to 30 Hz for optimal GPU/CPU balance.
-   - SVG Telemetry & charts: throttled to 10 Hz to prevent DOM layout thrashing.
-4. **WebGL Resolution Clamping:** Pixel ratio is clamped to `Math.min(window.devicePixelRatio, 2)` to guarantee consistent 60 FPS on high-DPI and Retina displays.
+### 1. 3D GLB Optimization Pipeline
+The celestial 3D models were converted and packed with 4-byte binary chunk alignments:
+* **Sun (`sun.glb`)**: 566 KB (73% size reduction) with solar emissive maps.
+* **Jupiter (`realistic_jupiter.glb`)**: 867 KB, high-contrast PBR banded atmospheric textures that remain brightly visible in pitch-black space.
+* **Mars (`mars.glb`)**: 749 KB (94.5% size reduction) with 1K optimized normal, roughness, and specular maps.
+* **Total Combined 3D Payload**: **2.18 MB** (down from initial ~34 MB).
+
+### 2. Network Delivery & Browser Caching
+* **Parallel Preload Hints**: `<link rel="preload" as="fetch" crossorigin="anonymous">` in `index.html` initiates parallel background asset downloads before script execution.
+* **Immutable Caching**: Vercel configuration serves models with `Cache-Control: public, max-age=31536000, immutable`, enabling 0ms subsequent loads from disk cache.
+* **In-Memory Promise Cache**: `getCachedGLTF()` ensures subsequent preset switches or resets resolve instantly without repeated parsing.
+
+### 3. Deep-Space Pure White Starfield
+* Replaced irregular colored and orange particle clusters with a layered 4-tier astronomical starfield ($N = 5,700$ stars) rendered in pure crisp white (`0xffffff`) with natural depth attenuation.
+* Replaced distracting colored nebula particles with subtle, faint silver cosmic stardust (`size: 0.9, opacity: 0.12`).
+
+### 4. Zero-Allocation Numerical Routines
+* `computeAccelerations` utilizes scalar loop variables without intermediate object allocations.
+* `computeSeparation` directly computes Euclidean coordinate distances without array allocations, eliminating garbage collector pauses during 60–144 FPS simulations.
 
 ---
 
-## 🛠️ Architecture & Folder Structure
+## 🛠️ Project Structure
 
 ```
 three-body-dynamics/
-├── index.html                # Application entry HTML with JetBrains Mono, Orbitron, and Montserrat fonts
+├── index.html                # Application entry HTML with GLB preload hints & fonts
 ├── package.json              # Dependencies and build scripts
-├── vercel.json               # Vercel deployment configuration
+├── vercel.json               # Vercel deployment with immutable Cache-Control headers
 ├── vite.config.js            # Vite build configuration with chunk splitting
+├── scripts/
+│   ├── optimize-models.py    # Python GLB texture compression & repacking utility
+│   └── test-physics-integrity.js  # Automated physics unit test suite
+├── public/
+│   ├── images/               # Textures and landing page imagery
+│   └── models/               # Optimized 3D GLB files (sun.glb, realistic_jupiter.glb, mars.glb)
 └── src/
     ├── App.jsx               # Master orchestrator component and simulation lifecycle
     ├── main.jsx              # React root mount
@@ -116,6 +157,24 @@ three-body-dynamics/
         ├── analysis/         # Telemetry drawer & scalable SVG MultiLineChart
         └── chat/             # Groq AI tutor panel & API key configuration modal
 ```
+
+---
+
+## 🧪 Testing & Verification
+
+The repository includes an automated mathematical and physics integrity test suite:
+
+```bash
+npm test
+```
+
+### Verified Test Cases:
+1. **Vector Math Integrity**: Verification of 3D vector addition, subtraction, scaling, dot products, and right-hand rule cross products.
+2. **Gravitational Potential Math**: Zero-allocation coordinate scalar potential computation matches vector-based formulations within $10^{-12}$.
+3. **Conservation of Energy in RK4**: Validates energy conservation over 100 simulation steps of the Chenciner–Montgomery Figure-8 orbit with relative error $< 10^{-4}$.
+4. **Symplectic Momentum Conservation**: Velocity Verlet conservation of linear and angular momentum within $10^{-6}$.
+5. **Lagrange Solver Verification**: Solves all five collinear and equilateral equilibrium points ($L_1–L_5$) with finite coordinates.
+6. **Orbital Presets Completeness**: Validates physical validity of initial velocities, masses, and coordinates across all preset systems.
 
 ---
 
@@ -160,7 +219,7 @@ npm run build
 | `SPACE` | Play / Pause simulation |
 | `R` | Reset to initial conditions |
 | `F` | Focus camera on selected body |
-| `C` | Cycle through camera modes |
+| `C` | Cycle through 9 camera modes |
 | `T` | Toggle Trajectory Trails |
 | `V` | Toggle velocity vector arrows |
 | `L` | Toggle Lagrange equilibrium points ($L_1–L_5$) |

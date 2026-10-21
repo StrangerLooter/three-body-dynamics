@@ -2,14 +2,14 @@ import { vScale } from './vectorMath.js';
 
 /**
  * Solar Planetary System
- * Central Sun with orbiting Earth and Mars in stable Keplerian trajectories.
+ * Central Sun with orbiting Jupiter and Mars in stable Keplerian trajectories.
  */
 export function presetSolarSystem() {
   const pSun = [0, 0, 0];
   const vSun = [0, 0, 0];
 
-  const pEarth = [1.5, 0, 0];
-  const vEarth = [0, 1.82, 0.01];
+  const pJupiter = [1.5, 0, 0];
+  const vJupiter = [0, 1.82, 0.01];
 
   const pMars = [2.4, 0, 0.1];
   const vMars = [0, 1.44, -0.015];
@@ -17,10 +17,10 @@ export function presetSolarSystem() {
   return {
     name: 'SOLAR PLANETARY SYSTEM',
     masses: [5.0, 0.03, 0.015],
-    radii: [0.26, 0.14, 0.11],
+    radii: [0.26, 0.17, 0.11],
     state: {
-      pos: [pSun, pEarth, pMars],
-      vel: [vSun, vEarth, vMars],
+      pos: [pSun, pJupiter, pMars],
+      vel: [vSun, vJupiter, vMars],
     },
   };
 }

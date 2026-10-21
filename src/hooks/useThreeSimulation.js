@@ -32,10 +32,10 @@ function buildDeepSpaceSkybox() {
   const root = new THREE.Group();
 
   const starSpectra = [
-    { count: 1800, radius: 80, size: 0.12, color: 0x8bbaff, opacity: 0.75 },
-    { count: 1600, radius: 65, size: 0.14, color: 0xffffff, opacity: 0.9 },
-    { count: 900,  radius: 50, size: 0.16, color: 0xffdf80, opacity: 0.85 },
-    { count: 600,  radius: 40, size: 0.18, color: 0xff8c73, opacity: 0.95 },
+    { count: 2200, radius: 85, size: 0.11, color: 0xffffff, opacity: 0.70 },
+    { count: 1800, radius: 70, size: 0.13, color: 0xffffff, opacity: 0.85 },
+    { count: 1100, radius: 55, size: 0.16, color: 0xffffff, opacity: 0.95 },
+    { count: 600,  radius: 40, size: 0.20, color: 0xffffff, opacity: 1.0 },
   ];
 
   starSpectra.forEach((s) => {
@@ -64,9 +64,9 @@ function buildDeepSpaceSkybox() {
   const NEBULA_COUNT = 350;
   const nebPos = new Float32Array(NEBULA_COUNT * 3);
   const nebColors = new Float32Array(NEBULA_COUNT * 3);
-  const colorA = new THREE.Color(0x38bdf8);
-  const colorB = new THREE.Color(0xa855f7);
-  const colorC = new THREE.Color(0xf59e0b);
+  const colorA = new THREE.Color(0xffffff);
+  const colorB = new THREE.Color(0xe2e8f0);
+  const colorC = new THREE.Color(0xf1f5f9);
 
   for (let i = 0; i < NEBULA_COUNT; i++) {
     const r = 35 + 30 * Math.random();
@@ -85,10 +85,10 @@ function buildDeepSpaceSkybox() {
   nebGeo.setAttribute('position', new THREE.BufferAttribute(nebPos, 3));
   nebGeo.setAttribute('color', new THREE.BufferAttribute(nebColors, 3));
   const nebMat = new THREE.PointsMaterial({
-    size: 1.8,
+    size: 0.9,
     vertexColors: true,
     transparent: true,
-    opacity: 0.16,
+    opacity: 0.12,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
   });
