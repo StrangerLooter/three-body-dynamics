@@ -211,7 +211,9 @@ export default function App() {
   const [chatMode, setChatMode] = useState('normal');
   const [narrateTimer, setNarrateTimer] = useState(null);
   const narrateRunningRef = useRef(false);
+  const abortControllerRef = useRef(null);
   const [groqKey, setGroqKey] = useState(getStoredApiKey());
+  const [selectedModel, setSelectedModel] = useState('openai/gpt-oss-120b');
 
   const handleKeySaved = (k) => {
     setGroqKey(k);
@@ -568,15 +570,34 @@ export default function App() {
   };
 
   // AI & Speech Interaction Handlers
-  const sendChatMessage = async (overrideText) => {
-    const text = (overrideText || chatInput).trim();
+  const handleCancelChat = useCallback(() => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setChatLoading(false);
+  }, []);
+
+  const handleClearChat = useCallback(() => {
+    handleCancelChat();
+    setChatMessages([]);
+    setChatError(null);
+  }, [handleCancelChat]);
+
+  const sendChatMessage = async (overrideText, customHistory = null) => {
+    const text = (overrideText !== undefined ? overrideText : chatInput).trim();
     if (!text || chatLoading) return;
+
+    const baseHistory = customHistory !== null ? customHistory : chatMessages;
     const userMsg = { role: 'user', content: text };
-    const nextMessages = [...chatMessages, userMsg];
+    const nextMessages = [...baseHistory, userMsg];
     setChatMessages(nextMessages);
     setChatInput('');
     setChatLoading(true);
     setChatError(null);
+
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
 
     try {
       const nlpReply = parseNaturalLanguageCommand(text, {
@@ -589,14 +610,30 @@ export default function App() {
           setUi((p) => ({ ...p, running: false }));
         },
         reset: resetSim,
+        step: stepOnce,
         setSpeed: (spd) => {
           simRef.current.speed = spd;
           setUi((p) => ({ ...p, speed: spd }));
         },
         loadPreset: loadPreset,
+        setIntegrator: setIntegrator,
         setTrails: (val) => {
           simRef.current.trailsOn = val;
           setUi((p) => ({ ...p, trailsOn: val }));
+        },
+        enableChaos: enableChaosLab,
+        disableChaos: disableChaosLab,
+        setVectors: (val) => {
+          simRef.current.showVectors = val;
+          setUi((p) => ({ ...p, showVectors: val }));
+        },
+        setLagrange: (val) => {
+          simRef.current.showLagrange = val;
+          setUi((p) => ({ ...p, showLagrange: val }));
+        },
+        setMass: (idx, m) => setMass(idx, m),
+        setAudio: (muted) => {
+          if (audio.isMuted !== muted) toggleAudio();
         },
       });
 
@@ -609,6 +646,8 @@ export default function App() {
           messages: [...nextMessages, { role: 'assistant', content: nlpReply }],
           mode: 'normal',
           simStateSnapshot: snapshot,
+          model: selectedModel,
+          signal: controller.signal,
         });
         reply = `${nlpReply}\n\n${aiComment}`;
       } else {
@@ -617,16 +656,57 @@ export default function App() {
           messages: nextMessages,
           mode: chatMode,
           simStateSnapshot: snapshot,
+          model: selectedModel,
+          signal: controller.signal,
         });
       }
 
       setChatMessages((m) => [...m, { role: 'assistant', content: reply }]);
     } catch (err) {
+      if (err.name === 'AbortError') {
+        return;
+      }
       setChatError(err.message || 'AI request failed.');
     } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
       setChatLoading(false);
     }
   };
+
+  const handleRegenerate = useCallback(
+    (index) => {
+      if (chatLoading) return;
+      let targetUserPrompt = '';
+      let historySlice = [];
+      if (typeof index === 'number' && index >= 0 && index < chatMessages.length) {
+        let userIdx = -1;
+        for (let i = index; i >= 0; i--) {
+          if (chatMessages[i].role === 'user') {
+            userIdx = i;
+            break;
+          }
+        }
+        if (userIdx !== -1) {
+          targetUserPrompt = chatMessages[userIdx].content;
+          historySlice = chatMessages.slice(0, userIdx);
+        }
+      } else {
+        const lastUser = [...chatMessages].reverse().find((m) => m.role === 'user');
+        if (lastUser) {
+          targetUserPrompt = lastUser.content;
+          const idx = chatMessages.lastIndexOf(lastUser);
+          historySlice = chatMessages.slice(0, idx);
+        }
+      }
+
+      if (targetUserPrompt) {
+        sendChatMessage(targetUserPrompt, historySlice);
+      }
+    },
+    [chatMessages, chatLoading, chatMode, groqKey, selectedModel]
+  );
 
   const startNarrate = () => {
     setChatMode('narrate');
@@ -942,6 +1022,13 @@ export default function App() {
           }
           onExportChat={exportChat}
           onOpenApiKeyModal={() => setUi((p) => ({ ...p, apiKeyModalOpen: true }))}
+          onClearChat={handleClearChat}
+          onRegenerate={handleRegenerate}
+          onCancel={handleCancelChat}
+          simState={simRef.current}
+          telemetry={ui}
+          apiKeyPresent={!!groqKey}
+          currentModel={selectedModel}
         />
       )}
 
@@ -955,6 +1042,8 @@ export default function App() {
         isOpen={ui.apiKeyModalOpen}
         onClose={() => setUi((p) => ({ ...p, apiKeyModalOpen: false }))}
         onKeySaved={handleKeySaved}
+        currentModel={selectedModel}
+        onModelChange={setSelectedModel}
       />
     </div>
   );
