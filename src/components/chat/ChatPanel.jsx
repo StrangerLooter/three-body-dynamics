@@ -38,7 +38,7 @@ export function ChatPanel({
   simState = null,
   telemetry = null,
   apiKeyPresent = false,
-  currentModel = 'llama-3.3-70b-versatile',
+  currentModel = 'openai/gpt-oss-120b',
   onApplyPreset,
   onRunSimulation,
   onPauseSimulation,

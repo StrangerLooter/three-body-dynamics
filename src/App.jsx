@@ -220,7 +220,7 @@ export default function App() {
   const narrateRunningRef = useRef(false);
   const abortControllerRef = useRef(null);
   const [groqKey, setGroqKey] = useState(getStoredApiKey());
-  const [selectedModel, setSelectedModel] = useState('llama-3.3-70b-versatile');
+  const [selectedModel, setSelectedModel] = useState('openai/gpt-oss-120b');
 
   const handleKeySaved = (k) => {
     setGroqKey(k);

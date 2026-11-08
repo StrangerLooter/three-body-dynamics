@@ -13,10 +13,11 @@ import {
 export const GROQ_STORAGE_KEY = 'groq_api_key';
 
 export const AVAILABLE_MODELS = [
-  { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (Default)', description: 'Ultra-fast inference & superior scientific accuracy' },
+  { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B (Default)', description: 'Balanced reasoning & physics capability' },
   { id: 'llama-3.1-8b-instant', label: 'Llama 3.1 8B Instant', description: 'Ultra-low latency real-time reasoning' },
+  { id: 'llama3-70b-8192', label: 'Llama 3 70B', description: 'High capability open model' },
+  { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B', description: 'Flagship open weights model' },
   { id: 'mixtral-8x7b-32768', label: 'Mixtral 8x7B', description: 'High context window' },
-  { id: 'openai/gpt-oss-120b', label: 'GPT-OSS 120B', description: 'Balanced reasoning & physics capability' },
 ];
 
 export function getStoredApiKey() {
@@ -109,9 +110,9 @@ export function buildSimSnapshot(sim, sysB = null) {
 
   return (
     `[LIVE TELEMETRY t=${sim.simTime.toFixed(1)}s, ${sim.presetKey}, ${sim.integrator.toUpperCase()}, dt=${sim.dt.toExponential(1)}, ${sim.running ? 'RUNNING' : 'PAUSED'}]\n` +
-    `E=${energy.total.toFixed(3)} (KE=${energy.KE.toFixed(3)}, PE=${energy.PE.toFixed(3)}), Drift=${drift}\n` +
+    `Total Energy: ${energy.total.toFixed(3)} (KE=${energy.KE.toFixed(3)}, PE=${energy.PE.toFixed(3)}), drift=${drift}\n` +
     `|P|=${vLen(p).toFixed(3)}, |L|=${vLen(L).toFixed(3)}, COM=[${com.map((v) => v.toFixed(2)).join(',')}]\n` +
-    `MinDist=${minDist} (B1-B2:${p01}, B1-B3:${p02}, B2-B3:${p12})${chaos}\n` +
+    `Pairwise Distances: Min=${minDist} (B1-B2:${p01}, B1-B3:${p02}, B2-B3:${p12})${chaos}\n` +
     bodies.join(' | ')
   );
 }
@@ -196,7 +197,7 @@ export async function callGroqChat({
   messages,
   mode = 'normal',
   simStateSnapshot = '',
-  model = 'llama-3.3-70b-versatile',
+  model = 'openai/gpt-oss-120b',
   signal = null,
 }) {
   const effectiveKey = apiKey || getStoredApiKey();
@@ -246,35 +247,68 @@ export async function callGroqChat({
     return m;
   });
 
-  const body = {
+  // Candidate fallback models to handle 404 access restrictions gracefully
+  const candidateModels = Array.from(new Set([
     model,
-    messages: [{ role: 'system', content: systemContent }, ...compactedMessages],
-    temperature,
-    top_p,
-    max_tokens,
-  };
+    'openai/gpt-oss-120b',
+    'llama-3.1-8b-instant',
+    'llama3-70b-8192',
+    'llama3-8b-8192',
+    'mixtral-8x7b-32768',
+    'llama-3.3-70b-versatile',
+  ]));
 
-  const executeFetch = () =>
-    fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${effectiveKey.trim()}`,
-      },
-      body: JSON.stringify(body),
-      signal: signal || undefined,
-    });
+  let lastError = null;
 
-  let res = await executeFetch();
+  for (const candidateModel of candidateModels) {
+    if (signal?.aborted) throw new Error('Request cancelled');
 
-  // 4. Rate-limit retry with backoff (HTTP 429 / 503)
-  if ((res.status === 429 || res.status === 503) && !signal?.aborted) {
-    await new Promise((r) => setTimeout(r, 750));
-    res = await executeFetch();
-  }
+    const body = {
+      model: candidateModel,
+      messages: [{ role: 'system', content: systemContent }, ...compactedMessages],
+      temperature,
+      top_p,
+      max_tokens,
+    };
 
-  if (!res.ok) {
+    const executeFetch = () =>
+      fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${effectiveKey.trim()}`,
+        },
+        body: JSON.stringify(body),
+        signal: signal || undefined,
+      });
+
+    let res = await executeFetch();
+
+    // Rate-limit retry with backoff (HTTP 429 / 503)
+    if ((res.status === 429 || res.status === 503) && !signal?.aborted) {
+      await new Promise((r) => setTimeout(r, 750));
+      res = await executeFetch();
+    }
+
+    if (res.ok) {
+      const data = await res.json();
+      const raw = data.choices?.[0]?.message?.content || '(No response received)';
+      const cleaned = stripThinkTags(raw);
+
+      if (lastUserMsg && cleaned) {
+        setCachedAnswer(lastUserMsg, mode, cleaned);
+      }
+      return cleaned;
+    }
+
+    // If 404 (model does not exist or access denied), try the next candidate model
     const errText = await res.text();
+    if (res.status === 404) {
+      lastError = `Groq API Error (404): ${errText.slice(0, 160)}`;
+      continue;
+    }
+
+    // Other error (401 auth, invalid key, etc.) -> format and throw
     let userMsg = `Groq API Error (${res.status})`;
     try {
       const parsed = JSON.parse(errText);
@@ -287,16 +321,7 @@ export async function callGroqChat({
     throw new Error(userMsg);
   }
 
-  const data = await res.json();
-  const raw = data.choices?.[0]?.message?.content || '(No response received)';
-  const cleaned = stripThinkTags(raw);
-
-  // Cache answer for static queries
-  if (lastUserMsg && cleaned) {
-    setCachedAnswer(lastUserMsg, mode, cleaned);
-  }
-
-  return cleaned;
+  throw new Error(lastError || 'Groq API request failed.');
 }
 
 /**
@@ -586,6 +611,23 @@ export function parseNaturalLanguageCommand(text, actions = {}) {
     }
   }
 
+  // If user typed a command keyword but it was invalid / unrecognized
+  const isCommandAttempt = /^(set|load|switch|change|toggle|turn|adjust)\b/i.test(lower);
+  if (isCommandAttempt) {
+    return (
+      `⚠ Unrecognized or ambiguous command: "${text}".\n\n` +
+      `Supported simulation commands:\n` +
+      `• Play/Pause: "pause", "resume", "play"\n` +
+      `• Reset/Step: "reset", "step"\n` +
+      `• Speed: "speed 0.5", "speed 1", "speed 2"\n` +
+      `• Presets: "preset figure-8", "preset solar", "preset triangle", "preset hierarchical", "preset chaos", "preset restricted"\n` +
+      `• Integrator: "integrator rk4", "integrator verlet", "integrator euler"\n` +
+      `• Visualizations: "trails on/off", "vectors on/off", "lagrange on/off"\n` +
+      `• Chaos: "chaos on", "chaos off"\n` +
+      `• Mass: "set mass of body 1 to 2.5"`
+    );
+  }
+
   return null;
 }
 
@@ -600,7 +642,7 @@ export function getLocalPhysicsAnswer(text) {
 
   const isGroqQuery =
     (lower.includes('groq') || lower.includes('grok')) &&
-    (lower.includes('connect') || lower.includes('online') || lower.includes('working') || lower.includes('status') || lower.includes('active') || lower.includes('is'));
+    (lower.includes('connect') || lower.includes('online') || lower.includes('working') || lower.includes('status') || lower.includes('active') || lower.includes('is') || lower.includes('right') || lower.includes('there'));
 
   if (isGroqQuery) {
     return (
