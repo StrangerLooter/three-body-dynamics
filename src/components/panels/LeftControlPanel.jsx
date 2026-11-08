@@ -181,6 +181,12 @@ export function LeftControlPanel({
               FIGURE-8 ORBIT
             </PresetBtn>
             <PresetBtn
+              active={presetKey === 'lagrangeTriangle'}
+              onClick={() => onLoadPreset('lagrangeTriangle')}
+            >
+              🔺 LAGRANGE EQUILATERAL
+            </PresetBtn>
+            <PresetBtn
               active={presetKey === 'hierarchical'}
               onClick={() => onLoadPreset('hierarchical')}
             >

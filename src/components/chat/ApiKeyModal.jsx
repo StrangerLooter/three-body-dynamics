@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getStoredApiKey, saveStoredApiKey, AVAILABLE_MODELS } from '../../services/aiService.js';
 
-export function ApiKeyModal({ isOpen, onClose, onKeySaved, currentModel = 'openai/gpt-oss-120b', onModelChange }) {
+export function ApiKeyModal({ isOpen, onClose, onKeySaved, currentModel = 'llama-3.3-70b-versatile', onModelChange }) {
   const [keyInput, setKeyInput] = useState('');
   const [showKey, setShowKey] = useState(false);
   const [selectedModel, setSelectedModel] = useState(currentModel);
@@ -10,7 +10,7 @@ export function ApiKeyModal({ isOpen, onClose, onKeySaved, currentModel = 'opena
   useEffect(() => {
     if (isOpen) {
       setKeyInput(getStoredApiKey());
-      setSelectedModel(currentModel || 'openai/gpt-oss-120b');
+      setSelectedModel(currentModel || 'llama-3.3-70b-versatile');
       setSavedSuccess(false);
     }
   }, [isOpen, currentModel]);

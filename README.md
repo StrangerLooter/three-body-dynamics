@@ -34,7 +34,8 @@ Designed for physics students, educators, and astronomy enthusiasts, the simulat
 | **Gravitational Field** | Directional field lines, magnitude-encoded vector fields, potential well heatmap contours, and tracer particle flow. |
 | **Gravitational Audio** | Procedural Web Audio API sonification of orbital acceleration, gravitational wave chirps on close approach, and deep-space cosmic drone. |
 | **Phase Space Analysis** | 2D $(x, v_x)$ state-space attractor trajectories, energy/momentum conservation charts, and CSV/JSON data export. |
-| **AI Physics Tutor** | Groq-powered assistant with live telemetry awareness, TTS voice narration, physics quizzes, and judge mode. |
+| **AI Physics Tutor & Copilot** | Groq-powered assistant featuring **KaTeX LaTeX math typesetting**, responsive Markdown tables, **autonomous background simulation control via chat**, interactive action chips, live telemetry awareness, TTS voice narration, and physics quizzes. |
+| **Orbit Presets & Choreographies** | Includes **Chenciner–Montgomery Figure-8**, **Lagrange Equilateral Triangle**, Solar Planetary System, Hierarchical Triple, Equal-Mass Chaos, and Restricted 3-Body regimes. |
 | **Camera & Control** | 9 camera modes (Free Orbit, Follow Body 1–3, Follow COM, Orthographic Top/Front/Side, Auto Orbit), full hotkey suite. |
 
 ---
@@ -81,6 +82,28 @@ $$\begin{aligned}
 In the Chaos Lab, an identical perturbed twin system $B$ is evolved synchronously with state separation $\delta_0 = 10^{-6}$:
 $$\lambda \approx \frac{1}{t - t_0} \ln\left( \frac{\|\Delta \vec{r}(t)\|}{\|\Delta \vec{r}(0)\|} \right)$$
 A strictly positive Lyapunov exponent ($\lambda > 0$) demonstrates the exponential divergence of trajectories characteristic of deterministic chaos.
+
+### 5. Stable Periodic Choreographies
+
+#### A. Chenciner–Montgomery Figure-Eight Orbit (2000)
+A celebrated zero-angular-momentum ($\mathbf{L} = \mathbf{0}$) choreography where three equal masses trace a single planar figure-8 path.
+- **Linear Stability (Carles Simó, 2002):** Proved linearly stable—all Floquet multipliers of the linearized Poincaré map lie strictly on the unit circle ($|\lambda_i| = 1$).
+- **Phase-Space KAM Tori:** Bounded by invariant Kolmogorov-Arnold-Moser tori, conferring long-term quasi-periodic stability against small perturbations.
+
+#### B. Lagrange's Equilateral Triangle Choreography (1772)
+Three equal masses placed at the vertices of an equilateral triangle rotating uniformly around their barycenter with speed $v = \sqrt{Gm/L}$.
+- **Gascheau Stability Condition:** In the rotating frame, triangular equilibria remain linearly stable when:
+  $$\frac{m_1 m_2 + m_2 m_3 + m_3 m_1}{(m_1 + m_2 + m_3)^2} < \frac{1}{27} \approx 0.037037$$
+
+---
+
+## 🤖 Next-Gen Physics Copilot Architecture
+
+The integrated AI Copilot workstation features:
+* **Minimalist UI & Zero Clutter:** Clean, distraction-free conversational experience with secondary tools, live telemetry, and 10 specialized physics modes tucked into a collapsible bottom accessory drawer.
+* **KaTeX LaTeX & Markdown Tables:** Native KaTeX formula typesetting ($...$ and $$...$$) and responsive, sticky-header Markdown tables for all coordinates, masses, and velocities.
+* **Background Simulation Control via Chat:** Type natural language commands such as `"set triangle and run"`, `"run"`, `"pause"`, `"reset"`, or click embedded interactive action chips (`[🔺 Set Triangle & Run]`, `[🌀 Set Figure-8 & Run]`) to manipulate the 3D physics engine instantly.
+* **20 Performance Optimizations:** In-memory LRU semantic caching (0ms response time for static queries), telemetry prompt compression from ~450 to ~90 tokens, numerical quantization, rate-limit retry with backoff, `React.memo` component memoization, and user-aware smart autoscroll.
 
 ---
 

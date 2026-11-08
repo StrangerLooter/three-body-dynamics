@@ -119,9 +119,34 @@ export function presetRestrictedThreeBody() {
   };
 }
 
+export function presetLagrangeTriangle() {
+  const v = Math.sqrt(1.0 / Math.sqrt(3.0)); // ~0.7598357
+  const vHalf = v / 2;
+  const vSqrt3Half = (v * Math.sqrt(3.0)) / 2; // ~0.658037
+
+  return {
+    name: 'LAGRANGE EQUILATERAL TRIANGLE',
+    masses: [1.0, 1.0, 1.0],
+    radii: [0.18, 0.16, 0.14],
+    state: {
+      pos: [
+        [1.0, 0.0, 0.0],
+        [-0.5, Math.sqrt(3.0) / 2.0, 0.0],
+        [-0.5, -Math.sqrt(3.0) / 2.0, 0.0],
+      ],
+      vel: [
+        [0.0, v, 0.0],
+        [-vSqrt3Half, -vHalf, 0.0],
+        [vSqrt3Half, -vHalf, 0.0],
+      ],
+    },
+  };
+}
+
 export const PRESETS = {
   solarSystem: presetSolarSystem,
   figureEight: presetFigureEight,
+  lagrangeTriangle: presetLagrangeTriangle,
   hierarchical: presetHierarchicalTriple,
   chaos: presetUnstableChaos,
   restricted: presetRestrictedThreeBody,

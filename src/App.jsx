@@ -20,6 +20,7 @@ import {
   saveStoredApiKey,
   buildSimSnapshot,
   parseNaturalLanguageCommand,
+  getLocalPhysicsAnswer,
 } from './services/aiService.js';
 import { speakText, stopSpeech } from './services/speechService.js';
 import { audio } from './services/audioService.js';
@@ -208,12 +209,18 @@ export default function App() {
   const [chatInput, setChatInput] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState(null);
-  const [chatMode, setChatMode] = useState('normal');
+  const [chatMode, setChatMode] = useState(() => {
+    try {
+      return window.localStorage.getItem('copilot_chat_mode') || 'normal';
+    } catch (e) {
+      return 'normal';
+    }
+  });
   const [narrateTimer, setNarrateTimer] = useState(null);
   const narrateRunningRef = useRef(false);
   const abortControllerRef = useRef(null);
   const [groqKey, setGroqKey] = useState(getStoredApiKey());
-  const [selectedModel, setSelectedModel] = useState('openai/gpt-oss-120b');
+  const [selectedModel, setSelectedModel] = useState('llama-3.3-70b-versatile');
 
   const handleKeySaved = (k) => {
     setGroqKey(k);
@@ -378,6 +385,7 @@ export default function App() {
     const presetDistances = {
       solarSystem: 7.0,
       figureEight: 6.5,
+      lagrangeTriangle: 6.2,
       hierarchical: 7.2,
       chaos: 6.8,
       restricted: 8.0,
@@ -641,24 +649,22 @@ export default function App() {
       let reply;
 
       if (nlpReply) {
-        const aiComment = await callGroqChat({
-          apiKey: groqKey,
-          messages: [...nextMessages, { role: 'assistant', content: nlpReply }],
-          mode: 'normal',
-          simStateSnapshot: snapshot,
-          model: selectedModel,
-          signal: controller.signal,
-        });
-        reply = `${nlpReply}\n\n${aiComment}`;
+        // Zero-roundtrip instant command execution for simulation controls
+        reply = nlpReply;
       } else {
-        reply = await callGroqChat({
-          apiKey: groqKey,
-          messages: nextMessages,
-          mode: chatMode,
-          simStateSnapshot: snapshot,
-          model: selectedModel,
-          signal: controller.signal,
-        });
+        const localAnswer = getLocalPhysicsAnswer(text);
+        if (localAnswer) {
+          reply = localAnswer;
+        } else {
+          reply = await callGroqChat({
+            apiKey: groqKey,
+            messages: nextMessages,
+            mode: chatMode,
+            simStateSnapshot: snapshot,
+            model: selectedModel,
+            signal: controller.signal,
+          });
+        }
       }
 
       setChatMessages((m) => [...m, { role: 'assistant', content: reply }]);
@@ -1029,6 +1035,21 @@ export default function App() {
           telemetry={ui}
           apiKeyPresent={!!groqKey}
           currentModel={selectedModel}
+          onApplyPreset={(key, runImmediate) => {
+            loadPreset(key);
+            if (runImmediate) {
+              simRef.current.running = true;
+              setUi((p) => ({ ...p, running: true }));
+            }
+          }}
+          onRunSimulation={() => {
+            simRef.current.running = true;
+            setUi((p) => ({ ...p, running: true }));
+          }}
+          onPauseSimulation={() => {
+            simRef.current.running = false;
+            setUi((p) => ({ ...p, running: false }));
+          }}
         />
       )}
 
