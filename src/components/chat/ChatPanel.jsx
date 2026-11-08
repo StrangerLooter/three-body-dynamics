@@ -92,12 +92,20 @@ export function ChatPanel({
   }, [input]);
 
   // Debounced, double-submit guarded send handler
-  const handleSendSafe = (textToSend = null) => {
+  const handleSendSafe = (textToSend) => {
     const now = Date.now();
-    if (now - lastSendTimeRef.current < 350) return; // 350ms debounce
+    if (now - lastSendTimeRef.current < 250) return;
     if (loading) return;
+
+    const messageText = typeof textToSend === 'string' && textToSend.trim() ? textToSend.trim() : input.trim();
+    if (!messageText) return;
+
     lastSendTimeRef.current = now;
-    onSend(textToSend);
+    if (typeof textToSend === 'string' && textToSend.trim()) {
+      onSend(textToSend);
+    } else {
+      onSend();
+    }
     focusTextarea();
   };
 

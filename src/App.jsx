@@ -593,7 +593,8 @@ export default function App() {
   }, [handleCancelChat]);
 
   const sendChatMessage = async (overrideText, customHistory = null) => {
-    const text = (overrideText !== undefined ? overrideText : chatInput).trim();
+    const raw = typeof overrideText === 'string' && overrideText.trim() ? overrideText : chatInput;
+    const text = (raw || '').trim();
     if (!text || chatLoading) return;
 
     const baseHistory = customHistory !== null ? customHistory : chatMessages;
